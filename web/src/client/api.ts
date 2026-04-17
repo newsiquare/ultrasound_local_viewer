@@ -1,8 +1,10 @@
 import {
   AiStatusData,
+  AnnotationItem,
   ApiErrorPayload,
   ApiOkPayload,
   BootstrapData,
+  CategoryItem,
   TimelineFrame,
   TimelinePageData,
   UploadResponseData,
@@ -136,6 +138,160 @@ export async function fetchAiStatus(videoId: string, signal?: AbortSignal): Prom
     cache: "no-store"
   });
   return parseJsonResponse<AiStatusData>(response);
+}
+
+export async function fetchCategories(videoId: string): Promise<CategoryItem[]> {
+  const response = await fetch(`/api/videos/${videoId}/categories`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<CategoryItem[]>(response);
+}
+
+export async function createCategory(
+  videoId: string,
+  payload: {
+    name: string;
+    color: string;
+  }
+): Promise<CategoryItem> {
+  const response = await fetch(`/api/videos/${videoId}/categories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<CategoryItem>(response);
+}
+
+export async function updateCategory(
+  videoId: string,
+  categoryId: string,
+  payload: {
+    name?: string;
+    color?: string;
+    isVisible?: boolean;
+  }
+): Promise<CategoryItem> {
+  const response = await fetch(`/api/videos/${videoId}/categories/${categoryId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<CategoryItem>(response);
+}
+
+export async function deleteCategory(videoId: string, categoryId: string): Promise<void> {
+  const response = await fetch(`/api/videos/${videoId}/categories/${categoryId}`, {
+    method: "DELETE"
+  });
+  if (response.status === 204) {
+    return;
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let payload: ApiErrorPayload | undefined;
+    try {
+      payload = text ? (JSON.parse(text) as ApiErrorPayload) : undefined;
+    } catch {
+      payload = undefined;
+    }
+    throw new Error(buildErrorMessage(response.status, payload));
+  }
+}
+
+export async function fetchAnnotations(
+  videoId: string,
+  options?: {
+    frameId?: string;
+    source?: "MANUAL" | "AI";
+    cursor?: number;
+    limit?: number;
+  }
+): Promise<{ total: number; nextCursor: number | null; items: AnnotationItem[] }> {
+  const query = new URLSearchParams();
+  if (options?.frameId) {
+    query.set("frameId", options.frameId);
+  }
+  if (options?.source) {
+    query.set("source", options.source);
+  }
+  query.set("cursor", String(options?.cursor ?? 0));
+  query.set("limit", String(options?.limit ?? 200));
+
+  const response = await fetch(`/api/videos/${videoId}/annotations?${query.toString()}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<{ total: number; nextCursor: number | null; items: AnnotationItem[] }>(response);
+}
+
+export async function createAnnotation(
+  videoId: string,
+  payload: {
+    frameId: string;
+    categoryId: string;
+    bbox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+  }
+): Promise<AnnotationItem> {
+  const response = await fetch(`/api/videos/${videoId}/annotations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AnnotationItem>(response);
+}
+
+export async function updateAnnotation(
+  videoId: string,
+  annotationId: string,
+  payload: {
+    categoryId?: string;
+    bbox?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+  }
+): Promise<AnnotationItem> {
+  const response = await fetch(`/api/videos/${videoId}/annotations/${annotationId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AnnotationItem>(response);
+}
+
+export async function deleteAnnotation(videoId: string, annotationId: string): Promise<void> {
+  const response = await fetch(`/api/videos/${videoId}/annotations/${annotationId}`, {
+    method: "DELETE"
+  });
+  if (response.status === 204) {
+    return;
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let payload: ApiErrorPayload | undefined;
+    try {
+      payload = text ? (JSON.parse(text) as ApiErrorPayload) : undefined;
+    } catch {
+      payload = undefined;
+    }
+    throw new Error(buildErrorMessage(response.status, payload));
+  }
 }
 
 export async function deleteVideo(videoId: string): Promise<void> {

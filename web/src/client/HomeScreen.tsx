@@ -111,7 +111,11 @@ export function HomeScreen() {
             onSelect={onSelectVideo}
             onReload={loadVideos}
           />
-          <LayersPanel bootstrapData={viewerSession.bootstrapData} />
+          <LayersPanel
+            videoId={viewerSession.currentVideoId}
+            bootstrapData={viewerSession.bootstrapData}
+            onReload={viewerSession.revalidateBootstrap}
+          />
         </div>
       </div>
 

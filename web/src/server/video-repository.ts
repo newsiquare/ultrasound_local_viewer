@@ -1,10 +1,12 @@
 import {
   executeMany,
   queryRows,
+  sqlBoolean,
   sqlNullableNumber,
   sqlNullableString,
   sqlString
 } from "@/server/db";
+import { uuidv7 } from "@/server/uuidv7";
 import { assertUuidV7 } from "@/server/validators";
 
 interface CountRow {
@@ -56,6 +58,10 @@ export interface AnnotationRow {
   bbox_json: string;
   created_at: string;
   updated_at: string;
+}
+
+interface IdRow {
+  id: string;
 }
 
 export interface CreateVideoRecordInput {
@@ -253,6 +259,130 @@ ORDER BY c.created_at ASC;
 `);
 }
 
+export async function getCategoryById(videoId: string, categoryId: string): Promise<CategoryRow | null> {
+  assertUuidV7(videoId);
+  const rows = await queryRows<CategoryRow>(`
+SELECT
+  c.id,
+  c.name,
+  c.color,
+  c.source,
+  c.is_visible,
+  COALESCE(a.cnt, 0) AS annotation_count
+FROM categories c
+LEFT JOIN (
+  SELECT category_id, COUNT(*) AS cnt
+  FROM annotations
+  WHERE video_id = ${sqlString(videoId)}
+  GROUP BY category_id
+) a ON a.category_id = c.id
+WHERE c.video_id = ${sqlString(videoId)}
+  AND c.id = ${sqlString(categoryId)}
+LIMIT 1;
+`);
+  return rows[0] ?? null;
+}
+
+export async function getCategoryByNameIgnoreCase(
+  videoId: string,
+  name: string
+): Promise<Pick<CategoryRow, "id" | "name"> | null> {
+  assertUuidV7(videoId);
+  const rows = await queryRows<Pick<CategoryRow, "id" | "name">>(`
+SELECT id, name
+FROM categories
+WHERE video_id = ${sqlString(videoId)}
+  AND LOWER(name) = LOWER(${sqlString(name)})
+LIMIT 1;
+`);
+  return rows[0] ?? null;
+}
+
+export async function createManualCategory(
+  videoId: string,
+  name: string,
+  color: string
+): Promise<CategoryRow> {
+  assertUuidV7(videoId);
+  const now = new Date().toISOString();
+  const categoryId = uuidv7();
+
+  await executeMany([
+    `INSERT INTO categories (
+      id,
+      video_id,
+      name,
+      color,
+      source,
+      is_visible,
+      created_at,
+      updated_at
+    ) VALUES (
+      ${sqlString(categoryId)},
+      ${sqlString(videoId)},
+      ${sqlString(name)},
+      ${sqlString(color)},
+      'MANUAL',
+      1,
+      ${sqlString(now)},
+      ${sqlString(now)}
+    );`
+  ]);
+
+  const created = await getCategoryById(videoId, categoryId);
+  if (!created) {
+    throw new Error("Failed to create category.");
+  }
+  return created;
+}
+
+export async function updateCategory(
+  videoId: string,
+  categoryId: string,
+  patch: {
+    name?: string;
+    color?: string;
+    isVisible?: boolean;
+  }
+): Promise<CategoryRow | null> {
+  assertUuidV7(videoId);
+
+  const sets: string[] = [];
+  if (patch.name !== undefined) {
+    sets.push(`name = ${sqlString(patch.name)}`);
+  }
+  if (patch.color !== undefined) {
+    sets.push(`color = ${sqlString(patch.color)}`);
+  }
+  if (patch.isVisible !== undefined) {
+    sets.push(`is_visible = ${sqlBoolean(patch.isVisible)}`);
+  }
+
+  if (sets.length === 0) {
+    return getCategoryById(videoId, categoryId);
+  }
+
+  sets.push(`updated_at = ${sqlString(new Date().toISOString())}`);
+
+  await executeMany([
+    `UPDATE categories
+     SET ${sets.join(",\n         ")}
+     WHERE video_id = ${sqlString(videoId)}
+       AND id = ${sqlString(categoryId)};`
+  ]);
+
+  return getCategoryById(videoId, categoryId);
+}
+
+export async function deleteCategory(videoId: string, categoryId: string): Promise<void> {
+  assertUuidV7(videoId);
+  await executeMany([
+    `DELETE FROM categories
+     WHERE video_id = ${sqlString(videoId)}
+       AND id = ${sqlString(categoryId)};`
+  ]);
+}
+
 export async function getAnnotationsByVideoAndFrameIds(
   videoId: string,
   frameIds: string[]
@@ -271,6 +401,150 @@ WHERE video_id = ${sqlString(videoId)}
   AND frame_id IN (${inExpr})
 ORDER BY created_at ASC;
 `);
+}
+
+export async function listAnnotations(
+  videoId: string,
+  options: {
+    frameId?: string | null;
+    source?: "MANUAL" | "AI" | null;
+    cursor: number;
+    limit: number;
+  }
+): Promise<{ items: AnnotationRow[]; nextCursor: number | null; total: number }> {
+  assertUuidV7(videoId);
+
+  const where: string[] = [`a.video_id = ${sqlString(videoId)}`];
+  if (options.frameId) {
+    where.push(`a.frame_id = ${sqlString(options.frameId)}`);
+  }
+  if (options.source) {
+    where.push(`c.source = ${sqlString(options.source)}`);
+  }
+
+  const whereExpr = where.join("\n  AND ");
+  const countRows = await queryRows<CountRow>(`
+SELECT COUNT(*) AS total
+FROM annotations a
+LEFT JOIN categories c ON c.id = a.category_id
+WHERE ${whereExpr};
+`);
+  const total = Number(countRows[0]?.total ?? 0);
+
+  const items = await queryRows<AnnotationRow>(`
+SELECT a.id, a.frame_id, a.category_id, a.bbox_json, a.created_at, a.updated_at
+FROM annotations a
+LEFT JOIN categories c ON c.id = a.category_id
+WHERE ${whereExpr}
+ORDER BY a.created_at ASC
+LIMIT ${options.limit}
+OFFSET ${options.cursor};
+`);
+
+  const nextCursor = options.cursor + items.length >= total ? null : options.cursor + items.length;
+  return { items, nextCursor, total };
+}
+
+export async function getAnnotationById(videoId: string, annotationId: string): Promise<AnnotationRow | null> {
+  assertUuidV7(videoId);
+  const rows = await queryRows<AnnotationRow>(`
+SELECT id, frame_id, category_id, bbox_json, created_at, updated_at
+FROM annotations
+WHERE video_id = ${sqlString(videoId)}
+  AND id = ${sqlString(annotationId)}
+LIMIT 1;
+`);
+  return rows[0] ?? null;
+}
+
+export async function createManualAnnotation(input: {
+  videoId: string;
+  frameId: string;
+  categoryId: string;
+  bboxJson: string;
+}): Promise<AnnotationRow> {
+  assertUuidV7(input.videoId);
+  const annotationId = uuidv7();
+  const now = new Date().toISOString();
+
+  await executeMany([
+    `INSERT INTO annotations (
+      id,
+      video_id,
+      frame_id,
+      category_id,
+      bbox_json,
+      created_at,
+      updated_at
+    ) VALUES (
+      ${sqlString(annotationId)},
+      ${sqlString(input.videoId)},
+      ${sqlString(input.frameId)},
+      ${sqlString(input.categoryId)},
+      ${sqlString(input.bboxJson)},
+      ${sqlString(now)},
+      ${sqlString(now)}
+    );`
+  ]);
+
+  const created = await getAnnotationById(input.videoId, annotationId);
+  if (!created) {
+    throw new Error("Failed to create annotation.");
+  }
+  return created;
+}
+
+export async function updateAnnotation(
+  videoId: string,
+  annotationId: string,
+  patch: {
+    categoryId?: string;
+    bboxJson?: string;
+  }
+): Promise<AnnotationRow | null> {
+  assertUuidV7(videoId);
+  const sets: string[] = [];
+  if (patch.categoryId !== undefined) {
+    sets.push(`category_id = ${sqlString(patch.categoryId)}`);
+  }
+  if (patch.bboxJson !== undefined) {
+    sets.push(`bbox_json = ${sqlString(patch.bboxJson)}`);
+  }
+  if (sets.length === 0) {
+    return getAnnotationById(videoId, annotationId);
+  }
+
+  sets.push(`updated_at = ${sqlString(new Date().toISOString())}`);
+
+  await executeMany([
+    `UPDATE annotations
+     SET ${sets.join(",\n         ")}
+     WHERE video_id = ${sqlString(videoId)}
+       AND id = ${sqlString(annotationId)};`
+  ]);
+
+  return getAnnotationById(videoId, annotationId);
+}
+
+export async function deleteAnnotation(videoId: string, annotationId: string): Promise<void> {
+  assertUuidV7(videoId);
+  await executeMany([
+    `DELETE FROM annotations
+     WHERE video_id = ${sqlString(videoId)}
+       AND id = ${sqlString(annotationId)};`
+  ]);
+}
+
+export async function categoryExistsForVideo(videoId: string, categoryId: string): Promise<boolean> {
+  assertUuidV7(videoId);
+  const rows = await queryRows<IdRow>(`
+SELECT id
+FROM categories
+WHERE video_id = ${sqlString(videoId)}
+  AND id = ${sqlString(categoryId)}
+LIMIT 1;
+`);
+  return Boolean(rows[0]?.id);
 }
 
 export async function setAiProcessing(videoId: string): Promise<string> {

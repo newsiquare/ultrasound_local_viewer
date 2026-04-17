@@ -127,3 +127,27 @@ export interface AiStatusData {
   updatedAt: string;
   progress: number;
 }
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  color: string;
+  source: string;
+  is_visible: number;
+  annotation_count: number;
+}
+
+export interface AnnotationItem {
+  id: string;
+  frameId: string;
+  categoryId: string;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+  bboxJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
