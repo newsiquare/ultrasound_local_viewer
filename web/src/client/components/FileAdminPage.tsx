@@ -39,6 +39,26 @@ const CONSISTENCY_STATUS_OPTIONS = [
   "ORPHAN_FS",
   "PROCESSING_LOCKED"
 ] as const;
+const SORT_BY_OPTIONS = [
+  { value: "uploaded_at", label: "uploaded_at" },
+  { value: "filename", label: "filename" },
+  { value: "ai_status", label: "ai_status" },
+  { value: "consistency_status", label: "consistency_status" },
+  { value: "category_count", label: "category_count" },
+  { value: "annotation_count", label: "annotation_count" },
+  { value: "ai_annotation_count", label: "ai_annotation_count" }
+] as const;
+
+type SortByValue = (typeof SORT_BY_OPTIONS)[number]["value"];
+type ColumnKey =
+  | "video_id"
+  | "filename"
+  | "uploaded_at"
+  | "category_annotation"
+  | "ai_status"
+  | "ai_category_annotation"
+  | "consistency"
+  | "actions";
 
 function formatTime(value: string | null): string {
   if (!value) {
@@ -130,23 +150,41 @@ export function FileAdminPage() {
 
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
+  const [dateFromInput, setDateFromInput] = useState("");
+  const [dateToInput, setDateToInput] = useState("");
+  const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<string | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<SortByValue>("uploaded_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [aiStatus, setAiStatus] = useState<(typeof AI_STATUS_OPTIONS)[number]>("ALL");
   const [consistencyStatus, setConsistencyStatus] =
     useState<(typeof CONSISTENCY_STATUS_OPTIONS)[number]>("ALL");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
+  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>({
+    video_id: true,
+    filename: true,
+    uploaded_at: true,
+    category_annotation: true,
+    ai_status: true,
+    ai_category_annotation: true,
+    consistency: true,
+    actions: true
+  });
 
   const loadList = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await fetchAdminFileList({
         q,
+        dateFrom,
+        dateTo,
         aiStatus,
         consistencyStatus,
         page,
         pageSize,
-        sortBy: "uploaded_at",
-        sortDir: "desc"
+        sortBy,
+        sortDir
       });
       setData(result);
       setError(null);
@@ -156,7 +194,7 @@ export function FileAdminPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [aiStatus, consistencyStatus, page, pageSize, q]);
+  }, [aiStatus, consistencyStatus, dateFrom, dateTo, page, pageSize, q, sortBy, sortDir]);
 
   const loadRiskSummary = useCallback(async () => {
     try {
@@ -233,6 +271,10 @@ export function FileAdminPage() {
     () => visibleVideoIds.length > 0 && visibleVideoIds.every((videoId) => selectedIdSet.has(videoId)),
     [selectedIdSet, visibleVideoIds]
   );
+  const visibleDataColumnCount = useMemo(
+    () => Object.values(columnVisibility).filter(Boolean).length,
+    [columnVisibility]
+  );
 
   useEffect(() => {
     if (page > totalPages) {
@@ -275,6 +317,15 @@ export function FileAdminPage() {
     event.preventDefault();
     setPage(1);
     setQ(qInput.trim());
+    setDateFrom(dateFromInput.trim() || undefined);
+    setDateTo(dateToInput.trim() || undefined);
+  }
+
+  function toggleColumnVisibility(column: ColumnKey): void {
+    setColumnVisibility((current) => ({
+      ...current,
+      [column]: !current[column]
+    }));
   }
 
   function onOpenMetadata(item: AdminFileListItem): void {
@@ -658,12 +709,71 @@ export function FileAdminPage() {
           </select>
         </label>
 
+        <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+          日期起
+          <input
+            type="date"
+            value={dateFromInput}
+            onChange={(event) => setDateFromInput(event.target.value)}
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+          日期迄
+          <input
+            type="date"
+            value={dateToInput}
+            onChange={(event) => setDateToInput(event.target.value)}
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+          排序欄位
+          <select
+            value={sortBy}
+            onChange={(event) => {
+              setSortBy(event.target.value as SortByValue);
+              setPage(1);
+            }}
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", minWidth: 180 }}
+          >
+            {SORT_BY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+          排序方向
+          <select
+            value={sortDir}
+            onChange={(event) => {
+              setSortDir(event.target.value as "asc" | "desc");
+              setPage(1);
+            }}
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", minWidth: 110 }}
+          >
+            <option value="desc">desc</option>
+            <option value="asc">asc</option>
+          </select>
+        </label>
+
         <button type="submit">搜尋</button>
         <button
           type="button"
           onClick={() => {
             setQInput("");
             setQ("");
+            setDateFromInput("");
+            setDateToInput("");
+            setDateFrom(undefined);
+            setDateTo(undefined);
+            setSortBy("uploaded_at");
+            setSortDir("desc");
             setAiStatus("ALL");
             setConsistencyStatus("ALL");
             setPage(1);
@@ -704,6 +814,85 @@ export function FileAdminPage() {
         </button>
         <span style={{ color: "#374151", fontSize: 12 }}>已勾選 {selectedVideoIds.length} 筆</span>
       </form>
+
+      <section
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 10,
+          padding: 12,
+          background: "#ffffff",
+          display: "grid",
+          gap: 8
+        }}
+      >
+        <strong>欄位顯示設定</strong>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.video_id}
+              onChange={() => toggleColumnVisibility("video_id")}
+            />
+            video_id
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.filename}
+              onChange={() => toggleColumnVisibility("filename")}
+            />
+            filename
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.uploaded_at}
+              onChange={() => toggleColumnVisibility("uploaded_at")}
+            />
+            uploaded_at
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.category_annotation}
+              onChange={() => toggleColumnVisibility("category_annotation")}
+            />
+            category/annotation
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.ai_status}
+              onChange={() => toggleColumnVisibility("ai_status")}
+            />
+            ai_status
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.ai_category_annotation}
+              onChange={() => toggleColumnVisibility("ai_category_annotation")}
+            />
+            ai category/annotation
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.consistency}
+              onChange={() => toggleColumnVisibility("consistency")}
+            />
+            consistency
+          </label>
+          <label style={columnToggleLabelStyle}>
+            <input
+              type="checkbox"
+              checked={columnVisibility.actions}
+              onChange={() => toggleColumnVisibility("actions")}
+            />
+            actions
+          </label>
+        </div>
+      </section>
 
       <section
         style={{
@@ -876,7 +1065,7 @@ export function FileAdminPage() {
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
                 <th style={cellHeadStyle}>
@@ -887,14 +1076,18 @@ export function FileAdminPage() {
                     aria-label="select all visible videos"
                   />
                 </th>
-                <th style={cellHeadStyle}>video_id</th>
-                <th style={cellHeadStyle}>filename</th>
-                <th style={cellHeadStyle}>uploaded_at</th>
-                <th style={cellHeadStyle}>category/annotation</th>
-                <th style={cellHeadStyle}>ai_status</th>
-                <th style={cellHeadStyle}>ai category/annotation</th>
-                <th style={cellHeadStyle}>consistency</th>
-                <th style={cellHeadStyle}>actions</th>
+                {columnVisibility.video_id ? <th style={cellHeadStyle}>video_id</th> : null}
+                {columnVisibility.filename ? <th style={cellHeadStyle}>filename</th> : null}
+                {columnVisibility.uploaded_at ? <th style={cellHeadStyle}>uploaded_at</th> : null}
+                {columnVisibility.category_annotation ? (
+                  <th style={cellHeadStyle}>category/annotation</th>
+                ) : null}
+                {columnVisibility.ai_status ? <th style={cellHeadStyle}>ai_status</th> : null}
+                {columnVisibility.ai_category_annotation ? (
+                  <th style={cellHeadStyle}>ai category/annotation</th>
+                ) : null}
+                {columnVisibility.consistency ? <th style={cellHeadStyle}>consistency</th> : null}
+                {columnVisibility.actions ? <th style={cellHeadStyle}>actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -908,72 +1101,87 @@ export function FileAdminPage() {
                       aria-label={`select ${item.video_id}`}
                     />
                   </td>
-                  <td style={cellBodyStyle}>
-                    <code>{item.video_id}</code>
-                  </td>
-                  <td style={cellBodyStyle}>{item.filename}</td>
-                  <td style={cellBodyStyle}>{formatTime(item.uploaded_at)}</td>
-                  <td style={cellBodyStyle}>
-                    {item.category_count} / {item.annotation_count}
-                  </td>
-                  <td style={cellBodyStyle}>{item.ai_status}</td>
-                  <td style={cellBodyStyle}>
-                    {item.ai_category_count} / {item.ai_annotation_count}
-                  </td>
-                  <td style={cellBodyStyle}>
-                    <span>{item.consistency_status}</span>
-                    <button type="button" title={consistencyTooltip(item)} style={{ marginLeft: 6 }}>
-                      info
-                    </button>
-                  </td>
-                  <td style={cellBodyStyle}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenMetadata(item)}
-                        title={metadataTooltip(item)}
-                      >
-                        metadata
+                  {columnVisibility.video_id ? (
+                    <td style={cellBodyStyle}>
+                      <code>{item.video_id}</code>
+                    </td>
+                  ) : null}
+                  {columnVisibility.filename ? <td style={cellBodyStyle}>{item.filename}</td> : null}
+                  {columnVisibility.uploaded_at ? (
+                    <td style={cellBodyStyle}>{formatTime(item.uploaded_at)}</td>
+                  ) : null}
+                  {columnVisibility.category_annotation ? (
+                    <td style={cellBodyStyle}>
+                      {item.category_count} / {item.annotation_count}
+                    </td>
+                  ) : null}
+                  {columnVisibility.ai_status ? <td style={cellBodyStyle}>{item.ai_status}</td> : null}
+                  {columnVisibility.ai_category_annotation ? (
+                    <td style={cellBodyStyle}>
+                      {item.ai_category_count} / {item.ai_annotation_count}
+                    </td>
+                  ) : null}
+                  {columnVisibility.consistency ? (
+                    <td style={cellBodyStyle}>
+                      <span>{item.consistency_status}</span>
+                      <button type="button" title={consistencyTooltip(item)} style={{ marginLeft: 6 }}>
+                        info
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => void onCheckConsistency(item)}
-                        disabled={checkingVideoId === item.video_id}
-                        title="檢查單支影片一致性"
-                      >
-                        檢查
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onPreviewCleanup(item)}
-                        disabled={previewingFilename === item.filename}
-                        title="預覽同檔名歷史版本清理"
-                      >
-                        預覽清理
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onDelete(item)}
-                        disabled={deletingVideoId === item.video_id}
-                        title="刪除影片與相關檔案"
-                      >
-                        刪除
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onRepair(item)}
-                        disabled={repairingVideoId === item.video_id}
-                        title="先 dry-run，再確認 apply"
-                      >
-                        修復
-                      </button>
-                    </div>
-                  </td>
+                    </td>
+                  ) : null}
+                  {columnVisibility.actions ? (
+                    <td style={cellBodyStyle}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => onOpenMetadata(item)}
+                          title={metadataTooltip(item)}
+                        >
+                          metadata
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onCheckConsistency(item)}
+                          disabled={checkingVideoId === item.video_id}
+                          title="檢查單支影片一致性"
+                        >
+                          檢查
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onPreviewCleanup(item)}
+                          disabled={previewingFilename === item.filename}
+                          title="預覽同檔名歷史版本清理"
+                        >
+                          預覽清理
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onDelete(item)}
+                          disabled={deletingVideoId === item.video_id}
+                          title="刪除影片與相關檔案"
+                        >
+                          刪除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onRepair(item)}
+                          disabled={repairingVideoId === item.video_id}
+                          title="先 dry-run，再確認 apply"
+                        >
+                          修復
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {!isLoading && (data?.items.length ?? 0) === 0 ? (
                 <tr>
-                  <td style={{ ...cellBodyStyle, textAlign: "center", color: "#6b7280" }} colSpan={9}>
+                  <td
+                    style={{ ...cellBodyStyle, textAlign: "center", color: "#6b7280" }}
+                    colSpan={1 + visibleDataColumnCount}
+                  >
                     查無資料
                   </td>
                 </tr>
@@ -1382,4 +1590,15 @@ const cellBodyStyle: CSSProperties = {
   padding: "10px 8px",
   fontSize: 14,
   verticalAlign: "top"
+};
+
+const columnToggleLabelStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 8px",
+  borderRadius: 8,
+  border: "1px solid #e5e7eb",
+  background: "#fafafa",
+  fontSize: 12
 };
