@@ -1,4 +1,12 @@
 import {
+  AdminFileCleanupData,
+  AdminFileAuditHistoryData,
+  AdminFileConsistencyData,
+  AdminFileListData,
+  AdminFileReconcileData,
+  AdminFileRiskEventsData,
+  AdminFileRiskSummaryData,
+  AiResultData,
   AiStatusData,
   AnnotationItem,
   ApiErrorPayload,
@@ -25,7 +33,14 @@ function buildErrorMessage(status: number, payload?: ApiErrorPayload): string {
 
 export async function parseJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const json = text ? (JSON.parse(text) as ApiOkPayload<T> | ApiErrorPayload) : null;
+  let json: ApiOkPayload<T> | ApiErrorPayload | null = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as ApiOkPayload<T> | ApiErrorPayload;
+    } catch {
+      json = null;
+    }
+  }
 
   if (!response.ok) {
     throw new Error(buildErrorMessage(response.status, json as ApiErrorPayload | undefined));
@@ -36,6 +51,158 @@ export async function parseJsonResponse<T>(response: Response): Promise<T> {
   }
 
   return json.data;
+}
+
+export async function fetchAdminFileList(options?: {
+  q?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  aiStatus?: string;
+  consistencyStatus?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+  signal?: AbortSignal;
+}): Promise<AdminFileListData> {
+  const query = new URLSearchParams();
+  if (options?.q) {
+    query.set("q", options.q);
+  }
+  if (options?.dateFrom) {
+    query.set("dateFrom", options.dateFrom);
+  }
+  if (options?.dateTo) {
+    query.set("dateTo", options.dateTo);
+  }
+  if (options?.aiStatus) {
+    query.set("aiStatus", options.aiStatus);
+  }
+  if (options?.consistencyStatus) {
+    query.set("consistencyStatus", options.consistencyStatus);
+  }
+  query.set("page", String(options?.page ?? 1));
+  query.set("pageSize", String(options?.pageSize ?? 20));
+  if (options?.sortBy) {
+    query.set("sortBy", options.sortBy);
+  }
+  if (options?.sortDir) {
+    query.set("sortDir", options.sortDir);
+  }
+
+  const response = await fetch(`/api/admin/file/list?${query.toString()}`, {
+    method: "GET",
+    signal: options?.signal,
+    cache: "no-store"
+  });
+
+  return parseJsonResponse<AdminFileListData>(response);
+}
+
+export async function fetchAdminFileConsistency(videoId: string): Promise<AdminFileConsistencyData> {
+  const response = await fetch(`/api/admin/file/${videoId}/consistency`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<AdminFileConsistencyData>(response);
+}
+
+export async function reconcileAdminFiles(payload: {
+  videoIds: string[];
+  mode: "dry-run" | "apply";
+  actions: string[];
+}): Promise<AdminFileReconcileData> {
+  const response = await fetch("/api/admin/file/reconcile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AdminFileReconcileData>(response);
+}
+
+export async function cleanupAdminFiles(payload: {
+  mode?: "dry-run" | "apply";
+  retentionDays?: number;
+  keepLatestPerFilename?: number;
+  highWatermarkPercent?: number;
+  confirmationToken?: string;
+  filename?: string;
+  videoIds?: string[];
+}): Promise<AdminFileCleanupData> {
+  const response = await fetch("/api/admin/file/cleanup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AdminFileCleanupData>(response);
+}
+
+export async function fetchAdminRiskSummary(): Promise<AdminFileRiskSummaryData> {
+  const response = await fetch("/api/admin/file/risk-summary", {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<AdminFileRiskSummaryData>(response);
+}
+
+export async function fetchAdminRiskEvents(options?: {
+  status?: "OPEN" | "RESOLVED";
+  severity?: "P0" | "P1" | "P2";
+  riskCode?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<AdminFileRiskEventsData> {
+  const query = new URLSearchParams();
+  if (options?.status) {
+    query.set("status", options.status);
+  }
+  if (options?.severity) {
+    query.set("severity", options.severity);
+  }
+  if (options?.riskCode) {
+    query.set("riskCode", options.riskCode);
+  }
+  query.set("page", String(options?.page ?? 1));
+  query.set("pageSize", String(options?.pageSize ?? 20));
+
+  const response = await fetch(`/api/admin/file/risk-events?${query.toString()}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<AdminFileRiskEventsData>(response);
+}
+
+export async function fetchAdminCleanupHistory(options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<AdminFileAuditHistoryData> {
+  const page = options?.page ?? 1;
+  const pageSize = options?.pageSize ?? 20;
+  const response = await fetch(`/api/admin/file/cleanup-history?page=${page}&pageSize=${pageSize}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<AdminFileAuditHistoryData>(response);
+}
+
+export async function fetchAdminVideoHistory(
+  videoId: string,
+  options?: {
+    page?: number;
+    pageSize?: number;
+  }
+): Promise<AdminFileAuditHistoryData> {
+  const page = options?.page ?? 1;
+  const pageSize = options?.pageSize ?? 20;
+  const response = await fetch(`/api/admin/file/${videoId}/history?page=${page}&pageSize=${pageSize}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  return parseJsonResponse<AdminFileAuditHistoryData>(response);
 }
 
 export async function fetchVideosList(signal?: AbortSignal): Promise<VideosListData> {
@@ -138,6 +305,15 @@ export async function fetchAiStatus(videoId: string, signal?: AbortSignal): Prom
     cache: "no-store"
   });
   return parseJsonResponse<AiStatusData>(response);
+}
+
+export async function fetchAiResult(videoId: string, signal?: AbortSignal): Promise<AiResultData> {
+  const response = await fetch(`/api/videos/${videoId}/ai-result`, {
+    method: "GET",
+    signal,
+    cache: "no-store"
+  });
+  return parseJsonResponse<AiResultData>(response);
 }
 
 export async function fetchCategories(videoId: string): Promise<CategoryItem[]> {

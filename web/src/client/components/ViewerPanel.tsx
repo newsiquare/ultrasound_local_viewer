@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
+import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
 import { useAiStatusStream } from "@/client/hooks/useAiStatusStream";
+import { useFrameAnnotations } from "@/client/hooks/useFrameAnnotations";
 import { useFrameTimeline } from "@/client/hooks/useFrameTimeline";
 import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
-import { AiStatus, BootstrapData } from "@/client/types";
+import { AiStatus, AnnotationItem, BootstrapData } from "@/client/types";
 
 interface ViewerPanelProps {
   currentVideoId: string | null;
@@ -67,17 +69,29 @@ export function ViewerPanel(props: ViewerPanelProps) {
   const timelineReady = bootstrapData?.timelineSummary.timelineStatus === "READY";
   const videoWidth = bootstrapData?.meta.video_width ?? 0;
   const videoHeight = bootstrapData?.meta.video_height ?? 0;
+  const aiOverlay = useAiOverlayData({
+    videoId: currentVideoId,
+    aiStatus: ai.status,
+    aiUpdatedAt: ai.updatedAt,
+    currentDisplayIndex: timeline.currentFrame?.displayIndex ?? null
+  });
 
-  const visibleCategoryIds = new Set(
-    (bootstrapData?.categories ?? [])
-      .filter((category) => category.is_visible !== 0)
-      .map((category) => category.id)
+  const visibleCategoryIds = useMemo(
+    () =>
+      new Set(
+        (bootstrapData?.categories ?? [])
+          .filter((category) => category.is_visible !== 0)
+          .map((category) => category.id)
+      ),
+    [bootstrapData?.categories]
   );
 
-  const currentFrameAnnotations = (bootstrapData?.annotationsCurrentWindow ?? [])
-    .filter((item) => item.frame_id === timeline.currentFrame?.frameId)
-    .filter((item) => visibleCategoryIds.has(item.category_id))
-    .map((item) => {
+  const fallbackFrameAnnotations: AnnotationItem[] = useMemo(() => {
+    const result: AnnotationItem[] = [];
+    for (const item of bootstrapData?.annotationsCurrentWindow ?? []) {
+      if (item.frame_id !== timeline.currentFrame?.frameId) {
+        continue;
+      }
       try {
         const parsed = JSON.parse(item.bbox_json) as {
           x: number;
@@ -85,21 +99,50 @@ export function ViewerPanel(props: ViewerPanelProps) {
           width: number;
           height: number;
         };
-        return {
+        result.push({
           id: item.id,
+          frameId: item.frame_id,
           categoryId: item.category_id,
-          x: parsed.x,
-          y: parsed.y,
-          width: parsed.width,
-          height: parsed.height
-        };
+          bbox: {
+            x: parsed.x,
+            y: parsed.y,
+            width: parsed.width,
+            height: parsed.height
+          },
+          bboxJson: item.bbox_json,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at
+        });
       } catch {
-        return null;
+        // Ignore invalid bbox json records.
       }
-    })
-    .filter((item): item is { id: string; categoryId: string; x: number; y: number; width: number; height: number } =>
-      Boolean(item)
-    );
+    }
+    return result;
+  }, [bootstrapData?.annotationsCurrentWindow, timeline.currentFrame?.frameId]);
+
+  const manualOverlay = useFrameAnnotations({
+    videoId: currentVideoId,
+    frameId: timeline.currentFrame?.frameId ?? null,
+    enabled: Boolean(
+      currentVideoId &&
+        layerState.annotationVisible &&
+        layerState.categoryMasterVisible &&
+        timeline.currentFrame?.frameId
+    ),
+    fallbackItems: fallbackFrameAnnotations
+  });
+
+  const currentFrameAnnotations = manualOverlay.items
+    .filter((item) => visibleCategoryIds.has(item.categoryId))
+    .map((item) => ({
+      id: item.id,
+      categoryId: item.categoryId,
+      x: item.bbox?.x ?? 0,
+      y: item.bbox?.y ?? 0,
+      width: item.bbox?.width ?? 0,
+      height: item.bbox?.height ?? 0
+    }))
+    .filter((item) => item.width > 0 && item.height > 0);
 
   return (
     <section
@@ -150,6 +193,66 @@ export function ViewerPanel(props: ViewerPanelProps) {
                     }}
                   />
                 ))}
+              </div>
+            ) : null}
+            {layerState.aiVisible && videoWidth > 0 && videoHeight > 0 ? (
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                {layerState.aiShowTrajectory ? (
+                  <svg
+                    width="100%"
+                    height="100%"
+                    viewBox={`0 0 ${videoWidth} ${videoHeight}`}
+                    preserveAspectRatio="none"
+                    style={{ position: "absolute", inset: 0 }}
+                  >
+                    {aiOverlay.trajectories.map((trajectory) => (
+                      <polyline
+                        key={`track-${trajectory.trackId}`}
+                        points={trajectory.points.map((point) => `${point.x},${point.y}`).join(" ")}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        strokeOpacity={0.8}
+                      />
+                    ))}
+                  </svg>
+                ) : null}
+
+                {layerState.aiShowBBox
+                  ? aiOverlay.detections.map((detection) => (
+                      <div
+                        key={`ai-${detection.id}`}
+                        style={{
+                          position: "absolute",
+                          left: `${(detection.x / videoWidth) * 100}%`,
+                          top: `${(detection.y / videoHeight) * 100}%`,
+                          width: `${(detection.width / videoWidth) * 100}%`,
+                          height: `${(detection.height / videoHeight) * 100}%`,
+                          border: "2px solid #f59e0b",
+                          boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
+                        }}
+                      >
+                        {layerState.aiShowTrackId && detection.trackId !== null ? (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: -18,
+                              left: 0,
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                              background: "rgba(245,158,11,0.95)",
+                              color: "#111827",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            #{detection.trackId} {Math.round(detection.score * 100)}%
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  : null}
               </div>
             ) : null}
             <ViewerAiActionDock
@@ -224,6 +327,18 @@ export function ViewerPanel(props: ViewerPanelProps) {
             </div>
           ) : null}
 
+          {manualOverlay.error ? (
+            <div style={{ borderRadius: 8, padding: 10, background: "#fee2e2", color: "#7f1d1d" }}>
+              manual overlay 載入失敗：{manualOverlay.error}
+            </div>
+          ) : null}
+
+          {aiOverlay.error ? (
+            <div style={{ borderRadius: 8, padding: 10, background: "#fee2e2", color: "#7f1d1d" }}>
+              AI overlay 載入失敗：{aiOverlay.error}
+            </div>
+          ) : null}
+
           {bootstrapData ? (
             <div style={{ display: "grid", gap: 6, fontSize: 14 }}>
               <div>檔名：{bootstrapData.meta.filename}</div>
@@ -237,6 +352,13 @@ export function ViewerPanel(props: ViewerPanelProps) {
                 timeline 幀數：{timeline.frames.length || bootstrapData.timelineSummary.totalFrames}（window:
                 {bootstrapData.timelineSummary.window.startDisplayIndex} -
                 {bootstrapData.timelineSummary.window.endDisplayIndex}）
+              </div>
+              <div>
+                manual overlay：{manualOverlay.loading ? "載入中" : "已同步"} · 當前幀框數 {currentFrameAnnotations.length}
+              </div>
+              <div>
+                AI overlay：{aiOverlay.loading ? "載入中" : aiOverlay.hasData ? "已同步" : "無資料"} · 當前幀框數{" "}
+                {aiOverlay.detections.length}
               </div>
               <div>
                 目前 AI 狀態：{ai.status}

@@ -128,6 +128,49 @@ export interface AiStatusData {
   progress: number;
 }
 
+export interface AiResultImage {
+  id: number;
+  file_name: string;
+  width: number;
+  height: number;
+  frame_index: number;
+  pts_us: number;
+}
+
+export interface AiResultAnnotation {
+  id: number;
+  image_id: number;
+  category_id: number;
+  bbox: [number, number, number, number];
+  score: number;
+  track_id: number;
+  frame_index: number;
+  pts_us: number;
+  source: "AI";
+}
+
+export interface AiResultCategory {
+  id: number;
+  name: string;
+  supercategory: string;
+}
+
+export interface AiResultData {
+  videoId: string;
+  status: string;
+  summary: {
+    aiCount: number;
+    aiDetectedFrames: number;
+    aiCategoryCount: number;
+    aiStatsUpdatedAt: string | null;
+  };
+  coco: {
+    images: AiResultImage[];
+    annotations: AiResultAnnotation[];
+    categories: AiResultCategory[];
+  };
+}
+
 export interface CategoryItem {
   id: string;
   name: string;
@@ -150,4 +193,160 @@ export interface AnnotationItem {
   bboxJson: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminFileMetadataPreview {
+  video_width: number | null;
+  video_height: number | null;
+  source_fps: number | null;
+  duration_sec: number | null;
+  video_codec: string | null;
+  pixel_format: string | null;
+  storage_path: string;
+  file_size_bytes: number | null;
+}
+
+export interface AdminFileConsistencyInfo {
+  last_checked_at: string | null;
+  consistency_reason: string | null;
+  locked_by_processing: boolean;
+}
+
+export interface AdminFileListItem {
+  video_id: string;
+  filename: string;
+  uploaded_at: string;
+  category_count: number;
+  annotation_count: number;
+  ai_status: string;
+  ai_category_count: number;
+  ai_annotation_count: number;
+  metadata_preview: AdminFileMetadataPreview;
+  consistency_status: string;
+  consistency_info: AdminFileConsistencyInfo;
+}
+
+export interface AdminFileListData {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: AdminFileListItem[];
+}
+
+export interface AdminFileConsistencyProblem {
+  code: string;
+  message: string;
+  severity: "P0" | "P1" | "P2";
+  path?: string;
+}
+
+export interface AdminFileConsistencyAction {
+  code: string;
+  title: string;
+  mode: "dry-run" | "apply";
+}
+
+export interface AdminFileConsistencyData {
+  videoId: string;
+  consistencyStatus: string;
+  checkedAt: string;
+  lockedByProcessing: boolean;
+  problems: AdminFileConsistencyProblem[];
+  suggestedActions: AdminFileConsistencyAction[];
+}
+
+export interface AdminFileReconcileItem {
+  videoId: string;
+  changed: boolean;
+  appliedActions: string[];
+  skippedActions: Array<{
+    action: string;
+    reason: string;
+  }>;
+  problems: string[];
+}
+
+export interface AdminFileReconcileData {
+  mode: "dry-run" | "apply";
+  summary: {
+    checked: number;
+    changed: number;
+    skipped: number;
+  };
+  items: AdminFileReconcileItem[];
+}
+
+export interface AdminFileCleanupCandidate {
+  videoId: string;
+  filename: string;
+  uploadedAt: string;
+  aiStatus: string;
+  fileSizeBytes: number | null;
+  rankInFilename: number;
+  olderThanRetention: boolean;
+  lockedByProcessing: boolean;
+  candidate: boolean;
+  reasons: string[];
+}
+
+export interface AdminFileCleanupData {
+  mode: "dry-run" | "apply";
+  policy: {
+    retentionDays: number;
+    keepLatestPerFilename: number;
+    highWatermarkPercent: number;
+    filename: string | null;
+  };
+  summary: {
+    checked: number;
+    eligible: number;
+    deleted: number;
+    estimatedReclaimedBytes: number;
+  };
+  confirmationToken: string | null;
+  candidates: AdminFileCleanupCandidate[];
+}
+
+export interface AdminFileRiskSummaryData {
+  generated_at: string;
+  open_p0: number;
+  open_p1: number;
+  open_p2: number;
+  new_24h: number;
+  resolved_24h: number;
+}
+
+export interface AdminFileRiskEventItem {
+  risk_code: string;
+  severity: "P0" | "P1" | "P2";
+  status: "OPEN" | "RESOLVED";
+  trigger_time: string;
+  resolved_time: string | null;
+  trigger_source: string | null;
+  owner: string | null;
+  latest_note: string | null;
+  video_id: string | null;
+}
+
+export interface AdminFileRiskEventsData {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: AdminFileRiskEventItem[];
+}
+
+export interface AdminFileAuditHistoryItem {
+  id: string;
+  event_type: "RECONCILE_APPLY" | "CLEANUP_APPLY" | string;
+  actor: string;
+  payload: unknown;
+  result: unknown;
+  created_at: string;
+}
+
+export interface AdminFileAuditHistoryData {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: AdminFileAuditHistoryItem[];
 }

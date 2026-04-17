@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -49,18 +49,57 @@ function runSqliteScript(script: string): Promise<SqliteResult> {
 
 async function initDatabase(): Promise<void> {
   const { storageRoot, videosRoot, repoRoot } = getStoragePaths();
-  const migrationPath = path.join(repoRoot, "web", "src", "server", "db", "migrations", "0001_phase1.sql");
+  const migrationsDir = path.join(repoRoot, "web", "src", "server", "db", "migrations");
 
   await mkdir(storageRoot, { recursive: true });
   await mkdir(videosRoot, { recursive: true });
 
-  const migrationSql = await readFile(migrationPath, "utf-8");
+  const migrationFiles = (await readdir(migrationsDir))
+    .filter((name) => name.endsWith(".sql"))
+    .sort((a, b) => a.localeCompare(b));
 
   await runSqliteScript(`
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
-${migrationSql}
+CREATE TABLE IF NOT EXISTS _migrations (
+  name TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL
+);
 `);
+
+  const rows = await runSqliteScript(`
+.mode json
+.headers on
+SELECT name FROM _migrations;
+`);
+  const applied = new Set<string>();
+  const text = rows.stdout.trim();
+  if (text) {
+    const parsed = JSON.parse(text) as Array<{ name: string }>;
+    for (const item of parsed) {
+      if (item?.name) {
+        applied.add(item.name);
+      }
+    }
+  }
+
+  for (const fileName of migrationFiles) {
+    if (applied.has(fileName)) {
+      continue;
+    }
+
+    const migrationSql = await readFile(path.join(migrationsDir, fileName), "utf-8");
+    const now = new Date().toISOString();
+
+    await runSqliteScript(`
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+BEGIN;
+${migrationSql}
+INSERT INTO _migrations (name, applied_at) VALUES (${sqlString(fileName)}, ${sqlString(now)});
+COMMIT;
+`);
+  }
 }
 
 export async function ensureDatabase(): Promise<void> {
