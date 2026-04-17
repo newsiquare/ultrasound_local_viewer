@@ -28,3 +28,4 @@ storage/*.sqlite-wal
 
 # Logs
 *.log
+ai-worker/app/__init__.py
