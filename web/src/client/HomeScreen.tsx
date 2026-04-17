@@ -6,6 +6,7 @@ import { Group as PanelGroup, Panel, Separator as PanelSeparator } from "react-r
 
 import { clearAiResult, deleteVideo, fetchVideosList } from "@/client/api";
 import { LayersPanel } from "@/client/components/LayersPanel";
+import { AiStatus } from "@/client/types";
 import { TopBar } from "@/client/components/TopBar";
 import { ViewerPanel } from "@/client/components/ViewerPanel";
 import { VideosListPanel } from "@/client/components/VideosListPanel";
@@ -18,6 +19,7 @@ export function HomeScreen() {
   const viewerSession = useViewerSessionState();
   const layerState = useLayerVisibilityState();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
+  const [currentDisplayIndex, setCurrentDisplayIndex] = useState<number | null>(null);
   const [isVideosLoading, setIsVideosLoading] = useState(false);
 
   const loadVideos = useCallback(async () => {
@@ -118,6 +120,7 @@ export function HomeScreen() {
                 statusMessage={viewerSession.statusMessage}
                 onRefresh={viewerSession.revalidateBootstrap}
                 layerState={layerState}
+                onFrameIndexChange={setCurrentDisplayIndex}
               />
             </div>
           </Panel>
@@ -140,6 +143,9 @@ export function HomeScreen() {
                 bootstrapData={viewerSession.bootstrapData}
                 onReload={viewerSession.revalidateBootstrap}
                 layerState={layerState}
+                aiStatus={(viewerSession.bootstrapData?.aiStatus ?? "IDLE") as AiStatus}
+                aiUpdatedAt={viewerSession.bootstrapData?.aiSummary?.aiStatsUpdatedAt ?? null}
+                currentDisplayIndex={currentDisplayIndex}
               />
             </div>
           </Panel>

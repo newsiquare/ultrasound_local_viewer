@@ -13,14 +13,18 @@ import {
   updateAnnotation,
   updateCategory
 } from "@/client/api";
+import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
 import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
-import { AnnotationItem, BootstrapData, CategoryItem } from "@/client/types";
+import { AiStatus, AnnotationItem, BootstrapData, CategoryItem } from "@/client/types";
 
 interface LayersPanelProps {
   videoId: string | null;
   bootstrapData: BootstrapData | null;
   onReload: () => Promise<void>;
   layerState: UseLayerVisibilityStateResult;
+  aiStatus: AiStatus;
+  aiUpdatedAt: string | null;
+  currentDisplayIndex: number | null;
 }
 
 function sortCategories(categories: CategoryItem[]): CategoryItem[] {
@@ -31,7 +35,7 @@ function sortCategories(categories: CategoryItem[]): CategoryItem[] {
 }
 
 export function LayersPanel(props: LayersPanelProps) {
-  const { videoId, bootstrapData, onReload, layerState } = props;
+  const { videoId, bootstrapData, onReload, layerState, aiStatus, aiUpdatedAt, currentDisplayIndex } = props;
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
@@ -53,6 +57,14 @@ export function LayersPanel(props: LayersPanelProps) {
   const [infoOpenId, setInfoOpenId] = useState<string | null>(null);
   const [hiddenAnnIds, setHiddenAnnIds] = useState<Set<string>>(new Set<string>());
   const [frameNavIndex, setFrameNavIndex] = useState(0);
+
+  const aiOverlay = useAiOverlayData({
+    videoId,
+    aiStatus,
+    aiUpdatedAt,
+    currentDisplayIndex
+  });
+  const aiCurrentDetections = aiOverlay.detections;
 
   const loadLayerData = useCallback(async () => {
     if (!videoId) {
@@ -592,8 +604,12 @@ export function LayersPanel(props: LayersPanelProps) {
               {layerState.aiVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
             <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#9a9bbf" }}>AI 圖層</span>
+            {aiOverlay.hasData && currentDisplayIndex !== null && (
+              <span style={{ fontSize: 10, color: "#4b5580", fontVariantNumeric: "tabular-nums" }}>f:{currentDisplayIndex}</span>
+            )}
           </div>
 
+          {/* Display options */}
           {[
             { label: "BBox 框", value: layerState.aiShowBBox, toggle: () => layerState.setAiShowBBox(!layerState.aiShowBBox) },
             { label: "Track ID", value: layerState.aiShowTrackId, toggle: () => layerState.setAiShowTrackId(!layerState.aiShowTrackId) },
@@ -607,6 +623,44 @@ export function LayersPanel(props: LayersPanelProps) {
               <span style={{ fontSize: 12, color: opt.value ? "#c8cae8" : "#5a5c7a" }}>{opt.label}</span>
             </label>
           ))}
+
+          {/* AI detection rows */}
+          {aiOverlay.loading && (
+            <div style={{ fontSize: 11, color: "#4b5580", padding: "8px 0", textAlign: "center" }}>載入中…</div>
+          )}
+          {!aiOverlay.loading && !aiOverlay.hasData && aiStatus === "DONE" && (
+            <div style={{ fontSize: 11, color: "#3a3c55", padding: "8px 0", textAlign: "center" }}>無 AI 資料</div>
+          )}
+          {!aiOverlay.loading && aiOverlay.hasData && aiCurrentDetections.length === 0 && (
+            <div style={{ fontSize: 11, color: "#3a3c55", padding: "8px 0", textAlign: "center" }}>此幀無偵測結果</div>
+          )}
+          {!aiOverlay.loading && aiCurrentDetections.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 8 }}>
+              {aiCurrentDetections.map((det, idx) => (
+                <div
+                  key={det.id}
+                  style={{
+                    display: "flex", alignItems: "center", height: 30, gap: 6,
+                    padding: "0 8px",
+                    borderRadius: 5,
+                    border: "1px solid #2e2f45",
+                    background: "#1a1b28",
+                    fontVariantNumeric: "tabular-nums"
+                  }}
+                >
+                  <span style={{ fontSize: 10, color: "#4b5580", width: 20, flexShrink: 0, textAlign: "right" }}>
+                    {idx + 1}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#9a9bbf", flex: "0 0 auto", minWidth: 40 }}>
+                    {det.categoryName}
+                  </span>
+                  <span style={{ fontSize: 10, color: "#5a5c7a", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    [{Math.round(det.x)}, {Math.round(det.y)}, {Math.round(det.width)}, {Math.round(det.height)}]
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>

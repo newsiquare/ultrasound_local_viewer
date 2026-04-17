@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchAiResult } from "@/client/api";
 import {
@@ -27,6 +27,8 @@ interface UseAiOverlayDataResult {
   loading: boolean;
   error: string | null;
   hasData: boolean;
+  sortedFrameIndices: number[];
+  resolveFrame: (frameIndex: number) => AiOverlayDetection[];
 }
 
 export function useAiOverlayData(options: UseAiOverlayDataOptions): UseAiOverlayDataResult {
@@ -125,11 +127,20 @@ export function useAiOverlayData(options: UseAiOverlayDataOptions): UseAiOverlay
     return output;
   }, [currentDisplayIndex, store]);
 
+  const sortedFrameIndices = useMemo(() => store?.sortedFrameIndices ?? [], [store]);
+
+  const resolveFrame = useCallback(
+    (frameIndex: number) => resolveDetectionsForFrame(store, frameIndex),
+    [store]
+  );
+
   return {
     detections,
     trajectories,
     loading,
     error,
-    hasData: Boolean(store)
+    hasData: Boolean(store),
+    sortedFrameIndices,
+    resolveFrame
   };
 }

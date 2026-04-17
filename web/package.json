@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:ai-overlay-stability": "rm -rf .tmp-tests && tsc -p tsconfig.tests.json && node --test .tmp-tests/tests/ai-overlay-stability.test.js && rm -rf .tmp-tests"
+    "test:ai-overlay-stability": "rm -rf .tmp-tests && tsc -p tsconfig.tests.json && node --test .tmp-tests/tests/ai-overlay-stability.test.js && rm -rf .tmp-tests",
+    "test:sse-health-risk": "node scripts/test-sse-health-risk.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

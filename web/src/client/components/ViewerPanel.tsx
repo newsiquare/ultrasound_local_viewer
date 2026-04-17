@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { ChevronFirst, ChevronLast, HardDriveDownload, Pause, Play, RefreshCw } from "lucide-react";
 
@@ -21,6 +21,7 @@ interface ViewerPanelProps {
   statusMessage: string | null;
   onRefresh: () => Promise<void>;
   layerState: UseLayerVisibilityStateResult;
+  onFrameIndexChange?: (displayIndex: number | null) => void;
 }
 
 function formatBytes(input: number): string {
@@ -46,7 +47,7 @@ function formatClock(inputSec: number): string {
 }
 
 export function ViewerPanel(props: ViewerPanelProps) {
-  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState } = props;
+  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState, onFrameIndexChange } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageTools = useViewerImageTools(currentVideoId);
@@ -61,6 +62,10 @@ export function ViewerPanel(props: ViewerPanelProps) {
     initialStatus: initialAiStatus,
     onTerminalStatus: onRefresh
   });
+  useEffect(() => {
+    onFrameIndexChange?.(timeline.currentFrame?.displayIndex ?? null);
+  }, [onFrameIndexChange, timeline.currentFrame?.displayIndex]);
+
   const timelineReady = bootstrapData?.timelineSummary.timelineStatus === "READY";
   const videoWidth = bootstrapData?.meta.video_width ?? 0;
   const videoHeight = bootstrapData?.meta.video_height ?? 0;

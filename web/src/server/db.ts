@@ -6,12 +6,31 @@ import { getStoragePaths } from "@/server/paths";
 
 let initPromise: Promise<void> | null = null;
 
+// Serial queue: ensures only one sqlite3 child process accesses the DB at a time.
+// Without this, concurrent requests spawn multiple processes that fight over the
+// file lock, causing SQLITE_BUSY (exit code 5 / "database is locked").
+let dbQueue: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const next = dbQueue.then(fn, fn) as Promise<T>;
+  // Keep the chain alive even if fn rejects, so the queue never stalls.
+  dbQueue = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
 interface SqliteResult {
   stdout: string;
   stderr: string;
 }
 
 function runSqliteScript(script: string): Promise<SqliteResult> {
+  return enqueue(() => runSqliteScriptRaw(script));
+}
+
+function runSqliteScriptRaw(script: string): Promise<SqliteResult> {
   const { dbPath } = getStoragePaths();
 
   return new Promise((resolve, reject) => {
@@ -42,6 +61,10 @@ function runSqliteScript(script: string): Promise<SqliteResult> {
       reject(new Error(`sqlite3 exited with code ${code}: ${stderr}`));
     });
 
+    // .timeout is a sqlite3 CLI meta-command: sets busy timeout without
+    // producing any output (unlike "PRAGMA busy_timeout = N;" which emits a
+    // result row in .mode json and corrupts the JSON output).
+    child.stdin.write(".timeout 8000\n");
     child.stdin.write(script);
     child.stdin.end();
   });
