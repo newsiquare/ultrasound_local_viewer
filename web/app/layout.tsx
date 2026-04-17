@@ -3,8 +3,8 @@ import "./globals.css";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-Hant">
-      <body style={{ fontFamily: "ui-sans-serif, system-ui" }}>{children}</body>
+    <html lang="zh-Hant" style={{ height: "100%" }}>
+      <body style={{ height: "100%", overflow: "hidden" }}>{children}</body>
     </html>
   );
 }

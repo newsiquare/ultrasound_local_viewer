@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "incremental": false
+  },
+  "include": [
+    "src/client/ai-overlay-stability.ts",
+    "tests/ai-overlay-stability.test.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

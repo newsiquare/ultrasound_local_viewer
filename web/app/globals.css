@@ -1,30 +1,103 @@
-* {
+@import "tailwindcss";
+
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
-  background: #f4f4f5;
-  color: #111827;
+  height: 100%;
+  overflow: hidden;
+  background: #0d0e1a;
+  color: #e2e3f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
-button {
-  border: 1px solid #d4d4d8;
-  border-radius: 8px;
-  padding: 8px 12px;
-  background: #fafafa;
+#__next {
+  height: 100%;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2e3052;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3e415e;
+}
+
+/* Range input */
+input[type="range"] {
+  accent-color: #4f8cff;
+  width: 100%;
+}
+
+/* Select */
+select {
+  background: #1a1b28;
+  color: #e2e3f0;
+  border: 1px solid #2e2f45;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
 }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+select:focus {
+  outline: 2px solid #4f8cff;
+  outline-offset: 1px;
 }
 
-@media (max-width: 900px) {
-  main {
-    padding: 12px !important;
-  }
+/* Text inputs */
+input[type="text"],
+input[type="number"] {
+  background: #1a1b28;
+  color: #e2e3f0;
+  border: 1px solid #2e2f45;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  outline: 2px solid #4f8cff;
+  outline-offset: 1px;
+}
+
+input[type="text"]::placeholder,
+input[type="number"]::placeholder {
+  color: #5a5c7a;
+}
+
+/* Checkbox */
+input[type="checkbox"] {
+  accent-color: #4f8cff;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Color input */
+input[type="color"] {
+  border: 1px solid #2e2f45;
+  border-radius: 4px;
+  padding: 1px;
+  background: #1a1b28;
+  cursor: pointer;
+  width: 32px;
+  height: 28px;
 }

@@ -316,6 +316,35 @@ export async function fetchAiResult(videoId: string, signal?: AbortSignal): Prom
   return parseJsonResponse<AiResultData>(response);
 }
 
+export async function reportAiSseHealth(
+  videoId: string,
+  payload: {
+    state: "HEALTHY" | "DEGRADED";
+    reason?: string;
+  }
+): Promise<void> {
+  const response = await fetch(`/api/videos/${videoId}/ai-status/health`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (response.status >= 200 && response.status < 300) {
+    return;
+  }
+
+  const text = await response.text();
+  let parsed: ApiErrorPayload | undefined;
+  try {
+    parsed = text ? (JSON.parse(text) as ApiErrorPayload) : undefined;
+  } catch {
+    parsed = undefined;
+  }
+  throw new Error(buildErrorMessage(response.status, parsed));
+}
+
 export async function fetchCategories(videoId: string): Promise<CategoryItem[]> {
   const response = await fetch(`/api/videos/${videoId}/categories`, {
     method: "GET",

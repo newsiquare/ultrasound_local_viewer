@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { cancelAiDetect, fetchAiStatus, startAiDetect } from "@/client/api";
+import { cancelAiDetect, fetchAiStatus, reportAiSseHealth, startAiDetect } from "@/client/api";
 import { AiStatus, AiStatusData } from "@/client/types";
 
 interface UseAiStatusStreamOptions {
@@ -26,6 +26,7 @@ interface UseAiStatusStreamResult {
 }
 
 const TERMINAL_STATUSES = new Set<AiStatus>(["DONE", "FAILED", "CANCELED"]);
+type SseHealthState = "UNKNOWN" | "HEALTHY" | "DEGRADED";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -48,6 +49,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   const staleGuardTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const lastEventAtRef = useRef(0);
+  const healthStateRef = useRef<SseHealthState>("UNKNOWN");
 
   const closeEventSource = useCallback(() => {
     if (eventSourceRef.current) {
@@ -72,6 +74,24 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     }
   }, []);
 
+  const reportHealthState = useCallback(
+    (state: "HEALTHY" | "DEGRADED", reason: string) => {
+      if (!videoId) {
+        return;
+      }
+
+      if (healthStateRef.current === state) {
+        return;
+      }
+      healthStateRef.current = state;
+
+      void reportAiSseHealth(videoId, { state, reason }).catch(() => {
+        // Ignore reporting failures; monitoring must not block playback.
+      });
+    },
+    [videoId]
+  );
+
   const applySnapshot = useCallback((snapshot: AiStatusData) => {
     setStatus(snapshot.status);
     setProgress(snapshot.progress ?? (snapshot.status === "DONE" ? 100 : 0));
@@ -89,27 +109,32 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
       const snapshot = await fetchAiStatus(videoId);
       applySnapshot(snapshot);
       if (TERMINAL_STATUSES.has(snapshot.status)) {
+        closeEventSource();
         stopPolling();
+        reportHealthState("HEALTHY", "TERMINAL_STATUS");
         void onTerminalStatus?.();
       }
     } catch {
       // Ignore transient polling errors.
     }
-  }, [applySnapshot, onTerminalStatus, stopPolling, videoId]);
+  }, [applySnapshot, closeEventSource, onTerminalStatus, reportHealthState, stopPolling, videoId]);
 
-  const startPolling = useCallback(() => {
-    if (!videoId || pollingTimerRef.current !== null) {
-      return;
-    }
+  const startPolling = useCallback(
+    (reason: string) => {
+      if (!videoId || pollingTimerRef.current !== null) {
+        return;
+      }
 
-    closeEventSource();
-    setIsPolling(true);
-    void pollOnce();
-
-    pollingTimerRef.current = window.setInterval(() => {
+      reportHealthState("DEGRADED", reason);
+      setIsPolling(true);
       void pollOnce();
-    }, 5000);
-  }, [closeEventSource, pollOnce, videoId]);
+
+      pollingTimerRef.current = window.setInterval(() => {
+        void pollOnce();
+      }, 5000);
+    },
+    [pollOnce, reportHealthState, videoId]
+  );
 
   useEffect(() => {
     setStatus(initialStatus);
@@ -119,6 +144,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
 
     reconnectAttemptsRef.current = 0;
     lastEventAtRef.current = Date.now();
+    healthStateRef.current = "UNKNOWN";
 
     stopPolling();
     stopStaleGuard();
@@ -135,6 +161,10 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
       lastEventAtRef.current = Date.now();
       reconnectAttemptsRef.current = 0;
       setIsStreaming(true);
+      if (pollingTimerRef.current !== null) {
+        stopPolling();
+      }
+      reportHealthState("HEALTHY", "SSE_EVENT_RECEIVED");
     };
 
     const parseEvent = (event: MessageEvent<string>) => {
@@ -163,13 +193,13 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
       setIsStreaming(false);
 
       if (reconnectAttemptsRef.current >= 3) {
-        startPolling();
+        startPolling("CONNECT_RETRY_EXCEEDED");
       }
     };
 
     staleGuardTimerRef.current = window.setInterval(() => {
       if (Date.now() - lastEventAtRef.current > 30000) {
-        startPolling();
+        startPolling("NO_EVENT_TIMEOUT");
       }
     }, 5000);
 
@@ -187,6 +217,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     applySnapshot,
     closeEventSource,
     initialStatus,
+    reportHealthState,
     startPolling,
     stopPolling,
     stopStaleGuard,
