@@ -563,6 +563,7 @@ export function FileAdminPage() {
     const target = data?.items.find((item) => item.video_id === videoId) ?? null;
     if (target) {
       onOpenMetadata(target);
+      void onCheckConsistencyByVideoId(videoId, { clearMessages: false, fromRiskEvent: true });
       return;
     }
 
@@ -570,24 +571,40 @@ export function FileAdminPage() {
     setQ(videoId);
     setPage(1);
     setReconcileMessage(`已套用 video_id 搜尋：${videoId}，列表更新後可點 metadata 開啟詳情。`);
+    void onCheckConsistencyByVideoId(videoId, { clearMessages: false, fromRiskEvent: true });
   }
 
-  async function onCheckConsistency(item: AdminFileListItem): Promise<void> {
-    setCheckingVideoId(item.video_id);
+  async function onCheckConsistencyByVideoId(
+    videoId: string,
+    options?: { clearMessages?: boolean; fromRiskEvent?: boolean }
+  ): Promise<void> {
+    setCheckingVideoId(videoId);
     setConsistencyError(null);
-    setReconcileMessage(null);
-    setCleanupError(null);
+    if (options?.clearMessages !== false) {
+      setReconcileMessage(null);
+      setCleanupError(null);
+    }
     try {
-      const detail = await fetchAdminFileConsistency(item.video_id);
+      const detail = await fetchAdminFileConsistency(videoId);
       setConsistencyDetail(detail);
       await loadList();
       await loadRiskSummary();
+      if (showRiskEvents) {
+        await loadRiskEvents(riskStatusFilter);
+      }
+      if (options?.fromRiskEvent) {
+        setReconcileMessage(`已由風險事件觸發一致性檢查：${videoId}`);
+      }
     } catch (checkError) {
       const message = checkError instanceof Error ? checkError.message : "Unknown consistency check error";
       setConsistencyError(message);
     } finally {
       setCheckingVideoId(null);
     }
+  }
+
+  async function onCheckConsistency(item: AdminFileListItem): Promise<void> {
+    await onCheckConsistencyByVideoId(item.video_id, { clearMessages: true });
   }
 
   async function onRepair(item: AdminFileListItem): Promise<void> {

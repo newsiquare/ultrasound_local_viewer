@@ -20,6 +20,7 @@ export function HomeScreen() {
   const layerState = useLayerVisibilityState();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
   const [currentDisplayIndex, setCurrentDisplayIndex] = useState<number | null>(null);
+  const [currentFrameId, setCurrentFrameId] = useState<string | null>(null);
   const [isVideosLoading, setIsVideosLoading] = useState(false);
 
   const loadVideos = useCallback(async () => {
@@ -121,6 +122,7 @@ export function HomeScreen() {
                 onRefresh={viewerSession.revalidateBootstrap}
                 layerState={layerState}
                 onFrameIndexChange={setCurrentDisplayIndex}
+                onFrameIdChange={setCurrentFrameId}
               />
             </div>
           </Panel>
@@ -146,6 +148,7 @@ export function HomeScreen() {
                 aiStatus={(viewerSession.bootstrapData?.aiStatus ?? "IDLE") as AiStatus}
                 aiUpdatedAt={viewerSession.bootstrapData?.aiSummary?.aiStatsUpdatedAt ?? null}
                 currentDisplayIndex={currentDisplayIndex}
+                viewerFrameId={currentFrameId}
               />
             </div>
           </Panel>

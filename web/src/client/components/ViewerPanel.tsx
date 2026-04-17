@@ -22,6 +22,7 @@ interface ViewerPanelProps {
   onRefresh: () => Promise<void>;
   layerState: UseLayerVisibilityStateResult;
   onFrameIndexChange?: (displayIndex: number | null) => void;
+  onFrameIdChange?: (frameId: string | null) => void;
 }
 
 function formatBytes(input: number): string {
@@ -47,7 +48,7 @@ function formatClock(inputSec: number): string {
 }
 
 export function ViewerPanel(props: ViewerPanelProps) {
-  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState, onFrameIndexChange } = props;
+  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState, onFrameIndexChange, onFrameIdChange } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageTools = useViewerImageTools(currentVideoId);
@@ -64,7 +65,8 @@ export function ViewerPanel(props: ViewerPanelProps) {
   });
   useEffect(() => {
     onFrameIndexChange?.(timeline.currentFrame?.displayIndex ?? null);
-  }, [onFrameIndexChange, timeline.currentFrame?.displayIndex]);
+    onFrameIdChange?.(timeline.currentFrame?.frameId ?? null);
+  }, [onFrameIdChange, onFrameIndexChange, timeline.currentFrame?.displayIndex, timeline.currentFrame?.frameId]);
 
   const timelineReady = bootstrapData?.timelineSummary.timelineStatus === "READY";
   const videoWidth = bootstrapData?.meta.video_width ?? 0;

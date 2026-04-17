@@ -25,6 +25,7 @@ interface LayersPanelProps {
   aiStatus: AiStatus;
   aiUpdatedAt: string | null;
   currentDisplayIndex: number | null;
+  viewerFrameId: string | null;
 }
 
 function sortCategories(categories: CategoryItem[]): CategoryItem[] {
@@ -35,7 +36,7 @@ function sortCategories(categories: CategoryItem[]): CategoryItem[] {
 }
 
 export function LayersPanel(props: LayersPanelProps) {
-  const { videoId, bootstrapData, onReload, layerState, aiStatus, aiUpdatedAt, currentDisplayIndex } = props;
+  const { videoId, bootstrapData, onReload, layerState, aiStatus, aiUpdatedAt, currentDisplayIndex, viewerFrameId } = props;
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
@@ -101,6 +102,11 @@ export function LayersPanel(props: LayersPanelProps) {
 
   useEffect(() => { void loadLayerData(); }, [loadLayerData]);
   useEffect(() => { setFrameNavIndex(0); setHiddenAnnIds(new Set<string>()); }, [videoId]);
+  useEffect(() => {
+    if (viewerFrameId && !editingAnnotationId) {
+      setNewAnnotationFrameId(viewerFrameId);
+    }
+  }, [viewerFrameId, editingAnnotationId]);
 
   const visibleCategoryCount = useMemo(() => {
     if (!layerState.categoryMasterVisible) return 0;
