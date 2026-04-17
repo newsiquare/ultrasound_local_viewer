@@ -1,0 +1,14 @@
+# conda env = py311_ultrasound_local_viewer
+# Core API service
+fastapi>=0.111,<1.0
+uvicorn[standard]>=0.30,<1.0
+python-multipart>=0.0.9,<1.0
+
+# AI inference
+ultralytics>=8.2,<9.0
+opencv-python-headless>=4.9,<5.0
+numpy>=1.26,<3.0
+
+# Serialization / validation
+pydantic>=2.7,<3.0
+orjson>=3.10,<4.0
