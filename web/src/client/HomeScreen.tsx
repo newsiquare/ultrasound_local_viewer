@@ -8,11 +8,13 @@ import { UploadPanel } from "@/client/components/UploadPanel";
 import { ViewerPanel } from "@/client/components/ViewerPanel";
 import { VideosListPanel } from "@/client/components/VideosListPanel";
 import { useUploadTask } from "@/client/hooks/useUploadTask";
+import { useLayerVisibilityState } from "@/client/hooks/useLayerVisibilityState";
 import { useViewerSessionState } from "@/client/hooks/useViewerSessionState";
 import { VideoListItem } from "@/client/types";
 
 export function HomeScreen() {
   const viewerSession = useViewerSessionState();
+  const layerState = useLayerVisibilityState();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export function HomeScreen() {
           loading={viewerSession.isBootstrapLoading}
           statusMessage={viewerSession.statusMessage}
           onRefresh={viewerSession.revalidateBootstrap}
+          layerState={layerState}
         />
 
         <div style={{ display: "grid", gap: 16 }}>
@@ -115,6 +118,7 @@ export function HomeScreen() {
             videoId={viewerSession.currentVideoId}
             bootstrapData={viewerSession.bootstrapData}
             onReload={viewerSession.revalidateBootstrap}
+            layerState={layerState}
           />
         </div>
       </div>

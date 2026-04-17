@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
 import { useAiStatusStream } from "@/client/hooks/useAiStatusStream";
 import { useFrameTimeline } from "@/client/hooks/useFrameTimeline";
+import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
 import { AiStatus, BootstrapData } from "@/client/types";
 
 interface ViewerPanelProps {
@@ -13,6 +14,7 @@ interface ViewerPanelProps {
   loading: boolean;
   statusMessage: string | null;
   onRefresh: () => Promise<void>;
+  layerState: UseLayerVisibilityStateResult;
 }
 
 function formatBytes(input: number): string {
@@ -45,7 +47,7 @@ function formatClock(inputSec: number): string {
 }
 
 export function ViewerPanel(props: ViewerPanelProps) {
-  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh } = props;
+  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const timeline = useFrameTimeline({
@@ -63,6 +65,41 @@ export function ViewerPanel(props: ViewerPanelProps) {
     onTerminalStatus: onRefresh
   });
   const timelineReady = bootstrapData?.timelineSummary.timelineStatus === "READY";
+  const videoWidth = bootstrapData?.meta.video_width ?? 0;
+  const videoHeight = bootstrapData?.meta.video_height ?? 0;
+
+  const visibleCategoryIds = new Set(
+    (bootstrapData?.categories ?? [])
+      .filter((category) => category.is_visible !== 0)
+      .map((category) => category.id)
+  );
+
+  const currentFrameAnnotations = (bootstrapData?.annotationsCurrentWindow ?? [])
+    .filter((item) => item.frame_id === timeline.currentFrame?.frameId)
+    .filter((item) => visibleCategoryIds.has(item.category_id))
+    .map((item) => {
+      try {
+        const parsed = JSON.parse(item.bbox_json) as {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+        return {
+          id: item.id,
+          categoryId: item.category_id,
+          x: parsed.x,
+          y: parsed.y,
+          width: parsed.width,
+          height: parsed.height
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((item): item is { id: string; categoryId: string; x: number; y: number; width: number; height: number } =>
+      Boolean(item)
+    );
 
   return (
     <section
@@ -97,6 +134,24 @@ export function ViewerPanel(props: ViewerPanelProps) {
               src={`/api/videos/${currentVideoId}/stream`}
               style={{ width: "100%", maxHeight: 460, display: "block" }}
             />
+            {layerState.annotationVisible && layerState.categoryMasterVisible && videoWidth > 0 && videoHeight > 0 ? (
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                {currentFrameAnnotations.map((annotation) => (
+                  <div
+                    key={annotation.id}
+                    style={{
+                      position: "absolute",
+                      left: `${(annotation.x / videoWidth) * 100}%`,
+                      top: `${(annotation.y / videoHeight) * 100}%`,
+                      width: `${(annotation.width / videoWidth) * 100}%`,
+                      height: `${(annotation.height / videoHeight) * 100}%`,
+                      border: "2px solid #22d3ee",
+                      boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
             <ViewerAiActionDock
               status={ai.status}
               progress={ai.progress}

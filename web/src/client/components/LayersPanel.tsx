@@ -9,15 +9,17 @@ import {
   deleteCategory,
   fetchAnnotations,
   fetchCategories,
+  updateAnnotation,
   updateCategory
 } from "@/client/api";
-import { useLayerVisibilityState } from "@/client/hooks/useLayerVisibilityState";
+import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
 import { AnnotationItem, BootstrapData, CategoryItem } from "@/client/types";
 
 interface LayersPanelProps {
   videoId: string | null;
   bootstrapData: BootstrapData | null;
   onReload: () => Promise<void>;
+  layerState: UseLayerVisibilityStateResult;
 }
 
 function SectionHeader(props: {
@@ -48,8 +50,7 @@ function sortCategories(categories: CategoryItem[]): CategoryItem[] {
 }
 
 export function LayersPanel(props: LayersPanelProps) {
-  const { videoId, bootstrapData, onReload } = props;
-  const layerState = useLayerVisibilityState();
+  const { videoId, bootstrapData, onReload, layerState } = props;
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
@@ -64,6 +65,7 @@ export function LayersPanel(props: LayersPanelProps) {
   const [bboxY, setBboxY] = useState("0");
   const [bboxW, setBboxW] = useState("120");
   const [bboxH, setBboxH] = useState("80");
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
 
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -90,8 +92,12 @@ export function LayersPanel(props: LayersPanelProps) {
       }
 
       const firstFrame = bootstrapData?.annotationsCurrentWindow[0]?.frame_id;
-      if (firstFrame) {
+      if (firstFrame && !editingAnnotationId) {
         setNewAnnotationFrameId(firstFrame);
+      }
+
+      if (editingAnnotationId && !nextAnnotations.items.some((item) => item.id === editingAnnotationId)) {
+        setEditingAnnotationId(null);
       }
 
       setNotice(null);
@@ -101,7 +107,12 @@ export function LayersPanel(props: LayersPanelProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [bootstrapData?.annotationsCurrentWindow, newAnnotationCategoryId, videoId]);
+  }, [
+    bootstrapData?.annotationsCurrentWindow,
+    editingAnnotationId,
+    newAnnotationCategoryId,
+    videoId
+  ]);
 
   useEffect(() => {
     void loadLayerData();
@@ -127,7 +138,7 @@ export function LayersPanel(props: LayersPanelProps) {
       setBusyKey(`cat-visible-${category.id}`);
       try {
         await updateCategory(videoId, category.id, { isVisible: nextVisible });
-        await loadLayerData();
+        await Promise.all([loadLayerData(), onReload()]);
       } catch (error) {
         const msg = error instanceof Error ? error.message : "更新類別可見性失敗";
         setNotice(msg);
@@ -135,7 +146,7 @@ export function LayersPanel(props: LayersPanelProps) {
         setBusyKey(null);
       }
     },
-    [loadLayerData, videoId]
+    [loadLayerData, onReload, videoId]
   );
 
   const handleCreateCategory = useCallback(async () => {
@@ -179,7 +190,21 @@ export function LayersPanel(props: LayersPanelProps) {
     [loadLayerData, onReload, videoId]
   );
 
-  const handleCreateAnnotation = useCallback(async () => {
+  const loadAnnotationToForm = useCallback((annotation: AnnotationItem) => {
+    setEditingAnnotationId(annotation.id);
+    setNewAnnotationFrameId(annotation.frameId);
+    setNewAnnotationCategoryId(annotation.categoryId);
+    setBboxX(String(annotation.bbox?.x ?? 0));
+    setBboxY(String(annotation.bbox?.y ?? 0));
+    setBboxW(String(annotation.bbox?.width ?? 100));
+    setBboxH(String(annotation.bbox?.height ?? 80));
+  }, []);
+
+  const cancelAnnotationEditing = useCallback(() => {
+    setEditingAnnotationId(null);
+  }, []);
+
+  const handleUpsertAnnotation = useCallback(async () => {
     if (!videoId) {
       return;
     }
@@ -194,22 +219,49 @@ export function LayersPanel(props: LayersPanelProps) {
       return;
     }
 
-    setBusyKey("create-annotation");
+    setBusyKey(editingAnnotationId ? `update-annotation-${editingAnnotationId}` : "create-annotation");
     try {
-      await createAnnotation(videoId, {
-        frameId: newAnnotationFrameId,
-        categoryId: newAnnotationCategoryId,
-        bbox: { x, y, width, height }
-      });
+      if (editingAnnotationId) {
+        await updateAnnotation(videoId, editingAnnotationId, {
+          categoryId: newAnnotationCategoryId,
+          bbox: { x, y, width, height }
+        });
+        setNotice("標註已更新");
+      } else {
+        await createAnnotation(videoId, {
+          frameId: newAnnotationFrameId,
+          categoryId: newAnnotationCategoryId,
+          bbox: { x, y, width, height }
+        });
+        setNotice("標註已新增");
+      }
+
       await Promise.all([loadLayerData(), onReload()]);
-      setNotice("標註已新增");
+      if (!editingAnnotationId) {
+        setBboxX("0");
+        setBboxY("0");
+        setBboxW("120");
+        setBboxH("80");
+      }
+      setEditingAnnotationId(null);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "新增標註失敗";
+      const msg = error instanceof Error ? error.message : editingAnnotationId ? "更新標註失敗" : "新增標註失敗";
       setNotice(msg);
     } finally {
       setBusyKey(null);
     }
-  }, [bboxH, bboxW, bboxX, bboxY, loadLayerData, newAnnotationCategoryId, newAnnotationFrameId, onReload, videoId]);
+  }, [
+    bboxH,
+    bboxW,
+    bboxX,
+    bboxY,
+    editingAnnotationId,
+    loadLayerData,
+    newAnnotationCategoryId,
+    newAnnotationFrameId,
+    onReload,
+    videoId
+  ]);
 
   const handleDeleteAnnotation = useCallback(
     async (annotationId: string) => {
@@ -221,6 +273,9 @@ export function LayersPanel(props: LayersPanelProps) {
         await deleteAnnotation(videoId, annotationId);
         await Promise.all([loadLayerData(), onReload()]);
         setNotice("標註已刪除");
+        if (editingAnnotationId === annotationId) {
+          setEditingAnnotationId(null);
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : "刪除標註失敗";
         setNotice(msg);
@@ -228,7 +283,7 @@ export function LayersPanel(props: LayersPanelProps) {
         setBusyKey(null);
       }
     },
-    [loadLayerData, onReload, videoId]
+    [editingAnnotationId, loadLayerData, onReload, videoId]
   );
 
   return (
@@ -358,7 +413,7 @@ export function LayersPanel(props: LayersPanelProps) {
                     value={newAnnotationFrameId}
                     onChange={(event) => setNewAnnotationFrameId(event.target.value)}
                     placeholder="frameId (e.g. f_000123)"
-                    disabled={!videoId}
+                    disabled={!videoId || Boolean(editingAnnotationId)}
                   />
                   <select
                     value={newAnnotationCategoryId}
@@ -379,18 +434,32 @@ export function LayersPanel(props: LayersPanelProps) {
                   <input value={bboxW} onChange={(event) => setBboxW(event.target.value)} placeholder="w" />
                   <input value={bboxH} onChange={(event) => setBboxH(event.target.value)} placeholder="h" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleCreateAnnotation()}
-                  disabled={!videoId || !newAnnotationCategoryId || busyKey === "create-annotation"}
-                >
-                  新增標註
-                </button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => void handleUpsertAnnotation()}
+                    disabled={
+                      !videoId ||
+                      !newAnnotationCategoryId ||
+                      busyKey === "create-annotation" ||
+                      busyKey === `update-annotation-${editingAnnotationId}`
+                    }
+                  >
+                    {editingAnnotationId ? "更新標註" : "新增標註"}
+                  </button>
+                  {editingAnnotationId ? (
+                    <button type="button" onClick={cancelAnnotationEditing}>
+                      取消編輯
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               <div style={{ display: "grid", gap: 6, maxHeight: 240, overflow: "auto" }}>
                 {annotations.map((item) => {
                   const rowBusy = busyKey === `delete-annotation-${item.id}`;
+                  const editing = item.id === editingAnnotationId;
+
                   return (
                     <div
                       key={item.id}
@@ -402,13 +471,18 @@ export function LayersPanel(props: LayersPanelProps) {
                       <div style={{ fontSize: 12 }}>
                         bbox: {item.bbox ? `${item.bbox.x}, ${item.bbox.y}, ${item.bbox.width}, ${item.bbox.height}` : "invalid"}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteAnnotation(item.id)}
-                        disabled={rowBusy}
-                      >
-                        刪除標註
-                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button type="button" onClick={() => loadAnnotationToForm(item)} disabled={editing}>
+                          {editing ? "編輯中" : "編輯"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteAnnotation(item.id)}
+                          disabled={rowBusy}
+                        >
+                          刪除標註
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

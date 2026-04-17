@@ -17,7 +17,7 @@ interface LayerVisibilityState {
   aiShowTrajectory: boolean;
 }
 
-interface UseLayerVisibilityStateResult extends LayerPanelsState, LayerVisibilityState {
+export interface UseLayerVisibilityStateResult extends LayerPanelsState, LayerVisibilityState {
   togglePanel: (panel: keyof LayerPanelsState) => void;
   setCategoryMasterVisible: (value: boolean) => void;
   setAnnotationVisible: (value: boolean) => void;
