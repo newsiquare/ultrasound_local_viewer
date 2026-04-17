@@ -18,7 +18,7 @@ interface ViewerAiActionDockProps {
 }
 
 const STATUS_CONFIG: Record<AiStatus, { label: string; color: string; pulse: boolean }> = {
-  IDLE: { label: "IDLE", color: "#4b5580", pulse: false },
+  IDLE: { label: "IDLE", color: "#7880a0", pulse: false },
   PROCESSING: { label: "處理中", color: "#f59e0b", pulse: true },
   DONE: { label: "完成", color: "#34d399", pulse: false },
   FAILED: { label: "失敗", color: "#f87171", pulse: false },
@@ -50,16 +50,16 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
         alignItems: "center",
         gap: 8,
         padding: "4px 8px",
-        background: "#13141f",
-        borderBottom: "1px solid #1e2035",
+        background: "#0f1018",
+        borderBottom: "1px solid #252638",
         flexShrink: 0,
         flexWrap: "wrap"
       }}
     >
       {/* AI label */}
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <Brain size={13} style={{ color: "#5a5c7a" }} />
-        <span style={{ fontSize: 11, color: "#5a5c7a", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <Brain size={13} style={{ color: "#9699b0" }} />
+        <span style={{ fontSize: 11, color: "#9699b0", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
           AI
         </span>
       </div>
@@ -106,8 +106,8 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
           fontSize: 12,
           fontWeight: 500,
           background: canStart ? "rgba(79,140,255,0.15)" : "transparent",
-          border: `1px solid ${canStart ? "rgba(79,140,255,0.3)" : "#2e2f45"}`,
-          color: canStart ? "#4f8cff" : "#3a3c55",
+          border: `1px solid ${canStart ? "rgba(79,140,255,0.3)" : "#3c3e58"}`,
+          color: canStart ? "#4f8cff" : "#585a78",
           cursor: canStart ? "pointer" : "not-allowed",
           opacity: canStart ? 1 : 0.5,
           fontFamily: "inherit",
@@ -159,7 +159,7 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
             fontSize: 11,
             background: errorMessage ? "rgba(248,113,113,0.1)" : "rgba(79,140,255,0.1)",
             border: errorMessage ? "1px solid rgba(248,113,113,0.2)" : "1px solid rgba(79,140,255,0.2)",
-            color: errorMessage ? "#f87171" : "#7c7e9a"
+            color: errorMessage ? "#f87171" : "#c9ccd8"
           }}
         >
           {errorMessage ?? notice}

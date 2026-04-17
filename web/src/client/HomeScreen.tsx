@@ -74,7 +74,7 @@ export function HomeScreen() {
         flexDirection: "column",
         height: "100vh",
         overflow: "hidden",
-        background: "#0d0e1a"
+        background: "#0a0b14"
       }}
     >
       <TopBar
@@ -89,7 +89,7 @@ export function HomeScreen() {
         <PanelGroup orientation="horizontal" style={{ flex: 1 }}>
           {/* Left: Videos list */}
           <Panel defaultSize="18%" minSize="12%" maxSize="30%">
-            <div style={{ height: "100%", overflow: "hidden", borderRight: "1px solid #1e2035" }}>
+            <div style={{ height: "100%", overflow: "hidden", borderRight: "1px solid #252638" }}>
               <VideosListPanel
                 items={videos}
                 currentVideoId={viewerSession.currentVideoId}
@@ -103,7 +103,7 @@ export function HomeScreen() {
           <PanelSeparator
             style={{
               width: 4,
-              background: "#1e2035",
+              background: "#252638",
               cursor: "col-resize",
               flexShrink: 0,
               transition: "background 0.15s"
@@ -128,7 +128,7 @@ export function HomeScreen() {
           <PanelSeparator
             style={{
               width: 4,
-              background: "#1e2035",
+              background: "#252638",
               cursor: "col-resize",
               flexShrink: 0,
               transition: "background 0.15s"
@@ -137,7 +137,7 @@ export function HomeScreen() {
 
           {/* Right: Layers */}
           <Panel defaultSize="25%" minSize="18%" maxSize="40%">
-            <div style={{ height: "100%", overflow: "hidden", borderLeft: "1px solid #1e2035" }}>
+            <div style={{ height: "100%", overflow: "hidden", borderLeft: "1px solid #252638" }}>
               <LayersPanel
                 videoId={viewerSession.currentVideoId}
                 bootstrapData={viewerSession.bootstrapData}

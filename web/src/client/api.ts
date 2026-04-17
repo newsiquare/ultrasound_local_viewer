@@ -5,6 +5,7 @@ import {
   AdminFileListData,
   AdminFileReconcileData,
   AdminFileRiskEventsData,
+  AdminFileRiskEventMutationData,
   AdminFileRiskSummaryData,
   AiResultData,
   AiStatusData,
@@ -174,6 +175,42 @@ export async function fetchAdminRiskEvents(options?: {
     cache: "no-store"
   });
   return parseJsonResponse<AdminFileRiskEventsData>(response);
+}
+
+export async function createAdminRiskEvent(payload: {
+  riskCode: string;
+  severity: "P0" | "P1" | "P2";
+  status?: "OPEN" | "RESOLVED";
+  videoId?: string;
+  owner?: string;
+  latestNote?: string;
+}): Promise<AdminFileRiskEventMutationData> {
+  const response = await fetch("/api/admin/file/risk-events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AdminFileRiskEventMutationData>(response);
+}
+
+export async function updateAdminRiskEvent(payload: {
+  riskCode: string;
+  videoId?: string;
+  severity?: "P0" | "P1" | "P2";
+  status?: "OPEN" | "RESOLVED";
+  owner?: string;
+  latestNote?: string;
+}): Promise<AdminFileRiskEventMutationData> {
+  const response = await fetch("/api/admin/file/risk-events", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<AdminFileRiskEventMutationData>(response);
 }
 
 export async function fetchAdminCleanupHistory(options?: {

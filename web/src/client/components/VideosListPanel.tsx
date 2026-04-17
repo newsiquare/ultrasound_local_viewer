@@ -17,7 +17,7 @@ function statusDot(aiStatus: string, timelineStatus: string): { color: string; t
   if (aiStatus === "DONE" && timelineStatus === "READY") return { color: "#34d399", title: "就緒" };
   if (aiStatus === "FAILED") return { color: "#f87171", title: "AI 失敗" };
   if (timelineStatus === "READY") return { color: "#60a5fa", title: "有 timeline" };
-  return { color: "#4b5580", title: "尚未處理" };
+  return { color: "#7880a0", title: "尚未處理" };
 }
 
 export function VideosListPanel(props: VideosListPanelProps) {
@@ -29,7 +29,7 @@ export function VideosListPanel(props: VideosListPanelProps) {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#13141f",
+        background: "#0f1018",
         overflow: "hidden"
       }}
     >
@@ -40,11 +40,11 @@ export function VideosListPanel(props: VideosListPanelProps) {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "10px 12px 8px",
-          borderBottom: "1px solid #1e2035",
+          borderBottom: "1px solid #252638",
           flexShrink: 0
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#5a5c7a", textTransform: "uppercase", letterSpacing: 0.8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#9699b0", textTransform: "uppercase", letterSpacing: 0.8 }}>
           影片列表
         </span>
         <button
@@ -57,7 +57,7 @@ export function VideosListPanel(props: VideosListPanelProps) {
             border: "none",
             padding: 4,
             cursor: loading ? "not-allowed" : "pointer",
-            color: loading ? "#3a3c55" : "#5a5c7a",
+            color: loading ? "#585a78" : "#9699b0",
             display: "flex",
             alignItems: "center",
             borderRadius: 4,
@@ -71,7 +71,7 @@ export function VideosListPanel(props: VideosListPanelProps) {
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
         {items.length === 0 && !loading ? (
-          <div style={{ padding: "20px 12px", fontSize: 12, color: "#3a3c55", textAlign: "center" }}>
+          <div style={{ padding: "20px 12px", fontSize: 12, color: "#585a78", textAlign: "center" }}>
             暫無影片
           </div>
         ) : null}
@@ -114,7 +114,7 @@ export function VideosListPanel(props: VideosListPanelProps) {
                   style={{
                     fontSize: 13,
                     fontWeight: isSelected ? 600 : 400,
-                    color: isSelected ? "#c8cae8" : "#9a9bbf",
+                    color: isSelected ? "#c8cae8" : "#d4d6f0",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -124,7 +124,7 @@ export function VideosListPanel(props: VideosListPanelProps) {
                   {item.filename}
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: "#4b5580", paddingLeft: 14 }}>
+              <div style={{ fontSize: 11, color: "#7880a0", paddingLeft: 14 }}>
                 AI: {item.ai_status} · {item.timeline_status}
               </div>
             </button>

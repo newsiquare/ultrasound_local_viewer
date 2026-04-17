@@ -131,7 +131,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
         flexDirection: "column",
         height: "100%",
         overflow: "hidden",
-        background: "#0d0e1a"
+        background: "#0a0b14"
       }}
     >
       {/* Toolbars */}
@@ -169,7 +169,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
               alignItems: "center",
               justifyContent: "center",
               gap: 10,
-              color: "#3a3c55"
+              color: "#585a78"
             }}
           >
             <HardDriveDownload size={40} strokeWidth={1} />
@@ -273,7 +273,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
                           whiteSpace: "nowrap"
                         }}
                       >
-                        #{detection.trackId} {Math.round(detection.score * 100)}%
+                        #{detection.trackId} {detection.categoryName} {Math.round(detection.score * 100)}%
                       </div>
                     )}
                   </div>
@@ -289,8 +289,8 @@ export function ViewerPanel(props: ViewerPanelProps) {
         <div
           style={{
             flexShrink: 0,
-            background: "#13141f",
-            borderTop: "1px solid #1e2035",
+            background: "#0f1018",
+            borderTop: "1px solid #252638",
             padding: "6px 10px",
             display: "grid",
             gap: 6
@@ -338,7 +338,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
             <span
               style={{
                 fontSize: 12,
-                color: "#7c7e9a",
+                color: "#c9ccd8",
                 fontVariantNumeric: "tabular-nums",
                 marginLeft: 4,
                 flexShrink: 0
@@ -372,7 +372,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
                 border: "none",
                 padding: 4,
                 cursor: loading ? "not-allowed" : "pointer",
-                color: "#4b5580",
+                color: "#7880a0",
                 display: "flex",
                 alignItems: "center",
                 borderRadius: 4
@@ -387,7 +387,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
             <div
               style={{
                 fontSize: 11,
-                color: "#4b5580",
+                color: "#7880a0",
                 display: "flex",
                 gap: 10,
                 flexWrap: "wrap",
@@ -399,7 +399,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
               <span>f:{String(timeline.currentFrame?.displayIndex ?? 0).padStart(3, "0")}</span>
               <span>pts:{timeline.currentFrame?.ptsUs ?? "-"}</span>
               <span>{formatBytes(bootstrapData.meta.file_size_bytes)}</span>
-              <span style={{ color: "#3a3c55" }}>
+              <span style={{ color: "#585a78" }}>
                 timeline:{bootstrapData.timelineSummary.totalFrames}f · ai:{aiOverlay.detections.length} · ann:{currentFrameAnnotations.length}
               </span>
             </div>
@@ -409,7 +409,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
 
       {/* Errors */}
       {(timeline.error || manualOverlay.error || aiOverlay.error || statusMessage) && (
-        <div style={{ flexShrink: 0, padding: "4px 10px", background: "#13141f", borderTop: "1px solid #1e2035" }}>
+        <div style={{ flexShrink: 0, padding: "4px 10px", background: "#0f1018", borderTop: "1px solid #252638" }}>
           {[timeline.error && `timeline: ${timeline.error}`, manualOverlay.error && `overlay: ${manualOverlay.error}`, aiOverlay.error && `AI: ${aiOverlay.error}`, statusMessage]
             .filter(Boolean)
             .map((msg, i) => (
@@ -450,7 +450,7 @@ function PlayBtn(props: {
         borderRadius: 5,
         background: "transparent",
         border: "none",
-        color: disabled ? "#2e3052" : "#9a9bbf",
+        color: disabled ? "#52547a" : "#d4d6f0",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
         flexShrink: 0

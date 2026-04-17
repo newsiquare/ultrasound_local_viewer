@@ -4,6 +4,7 @@ import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } f
 
 import {
   cleanupAdminFiles,
+  createAdminRiskEvent,
   deleteVideo,
   fetchAdminCleanupHistory,
   fetchAdminRiskEvents,
@@ -11,7 +12,8 @@ import {
   fetchAdminVideoHistory,
   fetchAdminFileConsistency,
   fetchAdminFileList,
-  reconcileAdminFiles
+  reconcileAdminFiles,
+  updateAdminRiskEvent
 } from "@/client/api";
 import {
   AdminFileAuditHistoryData,
@@ -178,8 +180,17 @@ export function FileAdminPage() {
   const [riskEvents, setRiskEvents] = useState<AdminFileRiskEventsData | null>(null);
   const [riskEventsError, setRiskEventsError] = useState<string | null>(null);
   const [riskEventsLoading, setRiskEventsLoading] = useState(false);
+  const [riskMutationLoading, setRiskMutationLoading] = useState(false);
+  const [riskMutationError, setRiskMutationError] = useState<string | null>(null);
+  const [riskMutationMessage, setRiskMutationMessage] = useState<string | null>(null);
   const [showRiskEvents, setShowRiskEvents] = useState(false);
   const [riskStatusFilter, setRiskStatusFilter] = useState<"OPEN" | "RESOLVED">("OPEN");
+  const [manualRiskCode, setManualRiskCode] = useState("");
+  const [manualRiskSeverity, setManualRiskSeverity] = useState<"P0" | "P1" | "P2">("P2");
+  const [manualRiskStatus, setManualRiskStatus] = useState<"OPEN" | "RESOLVED">("OPEN");
+  const [manualRiskVideoId, setManualRiskVideoId] = useState("");
+  const [manualRiskOwner, setManualRiskOwner] = useState("");
+  const [manualRiskNote, setManualRiskNote] = useState("");
   const [auditHistory, setAuditHistory] = useState<AdminFileAuditHistoryData | null>(null);
   const [auditHistoryLoading, setAuditHistoryLoading] = useState(false);
   const [auditHistoryError, setAuditHistoryError] = useState<string | null>(null);
@@ -777,12 +788,81 @@ export function FileAdminPage() {
     }
   }
 
+  async function onCreateManualRiskEvent(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const riskCode = manualRiskCode.trim();
+    if (!riskCode) {
+      setRiskMutationError("請輸入 riskCode。");
+      setRiskMutationMessage(null);
+      return;
+    }
+
+    setRiskMutationLoading(true);
+    setRiskMutationError(null);
+    setRiskMutationMessage(null);
+    try {
+      await createAdminRiskEvent({
+        riskCode,
+        severity: manualRiskSeverity,
+        status: manualRiskStatus,
+        videoId: manualRiskVideoId.trim() || undefined,
+        owner: manualRiskOwner.trim() || undefined,
+        latestNote: manualRiskNote.trim() || undefined
+      });
+      setRiskMutationMessage(`已更新風險事件：${riskCode}`);
+      setManualRiskNote("");
+      await loadRiskSummary();
+      if (showRiskEvents) {
+        await loadRiskEvents(riskStatusFilter);
+      }
+    } catch (mutationError) {
+      const message = mutationError instanceof Error ? mutationError.message : "Unknown risk mutation error";
+      setRiskMutationError(message);
+    } finally {
+      setRiskMutationLoading(false);
+    }
+  }
+
+  async function onPatchRiskEvent(
+    item: AdminFileRiskEventItem,
+    patch: {
+      severity?: "P0" | "P1" | "P2";
+      status?: "OPEN" | "RESOLVED";
+      owner?: string;
+      latestNote?: string;
+    }
+  ): Promise<void> {
+    setRiskMutationLoading(true);
+    setRiskMutationError(null);
+    setRiskMutationMessage(null);
+    try {
+      await updateAdminRiskEvent({
+        riskCode: item.risk_code,
+        videoId: item.video_id ?? undefined,
+        severity: patch.severity,
+        status: patch.status,
+        owner: patch.owner,
+        latestNote: patch.latestNote
+      });
+      setRiskMutationMessage(`已更新風險事件：${item.risk_code}`);
+      await loadRiskSummary();
+      if (showRiskEvents) {
+        await loadRiskEvents(riskStatusFilter);
+      }
+    } catch (mutationError) {
+      const message = mutationError instanceof Error ? mutationError.message : "Unknown risk update error";
+      setRiskMutationError(message);
+    } finally {
+      setRiskMutationLoading(false);
+    }
+  }
+
   return (
-    <main style={{ maxWidth: 1480, margin: "0 auto", padding: 20, display: "grid", gap: 16 }}>
+    <main className="admin-page" style={{ maxWidth: 1480, margin: "0 auto", padding: 20, display: "grid", gap: 16 }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ margin: 0 }}>File Admin</h1>
-          <p style={{ margin: "6px 0 0", color: "#374151" }}>
+          <p style={{ margin: "6px 0 0", color: "#9699b0" }}>
             管理影片資產、一致性狀態與維運資料。
           </p>
         </div>
@@ -791,11 +871,11 @@ export function FileAdminPage() {
           style={{
             display: "inline-block",
             textDecoration: "none",
-            border: "1px solid #d4d4d8",
+            border: "1px solid #3c3e58",
             borderRadius: 8,
             padding: "8px 12px",
-            color: "#111827",
-            background: "#fafafa"
+            color: "#c9ccd8",
+            background: "#171824"
           }}
         >
           切換帳號
@@ -956,15 +1036,15 @@ export function FileAdminPage() {
         >
           批次套用(apply)
         </button>
-        <span style={{ color: "#374151", fontSize: 12 }}>已勾選 {selectedVideoIds.length} 筆</span>
+        <span style={{ color: "#9699b0", fontSize: 12 }}>已勾選 {selectedVideoIds.length} 筆</span>
       </form>
 
       <section
         style={{
-          border: "1px solid #e5e7eb",
+          border: "1px solid #3c3e58",
           borderRadius: 10,
           padding: 12,
-          background: "#ffffff",
+          background: "#171824",
           display: "grid",
           gap: 8
         }}
@@ -1040,10 +1120,10 @@ export function FileAdminPage() {
 
       <section
         style={{
-          border: "1px solid #e5e7eb",
+          border: "1px solid #3c3e58",
           borderRadius: 10,
           padding: 12,
-          background: "#ffffff",
+          background: "#171824",
           display: "grid",
           gap: 10
         }}
@@ -1085,7 +1165,7 @@ export function FileAdminPage() {
         </header>
 
         {riskSummaryError ? (
-          <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
             風險摘要載入失敗：{riskSummaryError}
           </div>
         ) : null}
@@ -1097,27 +1177,105 @@ export function FileAdminPage() {
           <RiskSummaryCard title="New 24h" value={riskSummary?.new_24h ?? 0} />
           <RiskSummaryCard title="Resolved 24h" value={riskSummary?.resolved_24h ?? 0} />
         </div>
-        <div style={{ color: "#6b7280", fontSize: 12 }}>
+        <div style={{ color: "#7880a0", fontSize: 12 }}>
           generated_at: {riskSummary ? formatTime(riskSummary.generated_at) : "-"}
         </div>
+
+        <form
+          onSubmit={(event) => void onCreateManualRiskEvent(event)}
+          style={{
+            border: "1px dashed #d1d5db",
+            borderRadius: 8,
+            padding: 10,
+            display: "grid",
+            gap: 8
+          }}
+        >
+          <strong>手動建立 / 覆寫風險事件</strong>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <input
+              type="text"
+              value={manualRiskCode}
+              onChange={(event) => setManualRiskCode(event.target.value)}
+              placeholder="riskCode (例如 FS_DB_INCONSISTENCY)"
+              style={{ minWidth: 260, padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+            />
+            <input
+              type="text"
+              value={manualRiskVideoId}
+              onChange={(event) => setManualRiskVideoId(event.target.value)}
+              placeholder="videoId（可留空）"
+              style={{ minWidth: 280, padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+            />
+            <input
+              type="text"
+              value={manualRiskOwner}
+              onChange={(event) => setManualRiskOwner(event.target.value)}
+              placeholder="owner（可留空）"
+              style={{ minWidth: 180, padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+            />
+            <select
+              value={manualRiskSeverity}
+              onChange={(event) => setManualRiskSeverity(event.target.value as "P0" | "P1" | "P2")}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", minWidth: 90 }}
+            >
+              <option value="P0">P0</option>
+              <option value="P1">P1</option>
+              <option value="P2">P2</option>
+            </select>
+            <select
+              value={manualRiskStatus}
+              onChange={(event) => setManualRiskStatus(event.target.value as "OPEN" | "RESOLVED")}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", minWidth: 110 }}
+            >
+              <option value="OPEN">OPEN</option>
+              <option value="RESOLVED">RESOLVED</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="text"
+              value={manualRiskNote}
+              onChange={(event) => setManualRiskNote(event.target.value)}
+              placeholder="latestNote（可留空）"
+              style={{ flex: "1 1 380px", minWidth: 280, padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+            />
+            <button type="submit" disabled={riskMutationLoading}>
+              {riskMutationLoading ? "送出中..." : "送出手動事件"}
+            </button>
+          </div>
+        </form>
+
+        {riskMutationError ? (
+          <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
+            風險事件操作失敗：{riskMutationError}
+          </div>
+        ) : null}
+        {riskMutationMessage ? (
+          <div style={{ background: "rgba(52,211,153,0.1)", color: "#34d399", padding: 10, borderRadius: 8 }}>
+            {riskMutationMessage}
+          </div>
+        ) : null}
 
         {showRiskEvents ? (
           <section style={{ display: "grid", gap: 6 }}>
             <strong>風險事件列表</strong>
             {riskEventsError ? (
-              <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+              <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
                 風險事件載入失敗：{riskEventsError}
               </div>
             ) : null}
-            {riskEventsLoading ? <div style={{ color: "#374151" }}>載入風險事件...</div> : null}
+            {riskEventsLoading ? <div style={{ color: "#c9ccd8" }}>載入風險事件...</div> : null}
             {!riskEventsLoading && (riskEvents?.items.length ?? 0) === 0 ? (
-              <div style={{ color: "#6b7280" }}>目前無風險事件。</div>
+              <div style={{ color: "#9699b0" }}>目前無風險事件。</div>
             ) : (
               riskEvents?.items.map((item, index) => (
                 <RiskEventCard
-                  key={`${item.video_id ?? "none"}-${index}`}
+                  key={`${item.risk_code}-${item.video_id ?? "__GLOBAL__"}-${index}`}
                   item={item}
                   onOpenVideoDetail={onOpenVideoDetailById}
+                  onPatch={onPatchRiskEvent}
+                  disabled={riskMutationLoading}
                 />
               ))
             )}
@@ -1127,10 +1285,10 @@ export function FileAdminPage() {
 
       <section
         style={{
-          border: "1px solid #e5e7eb",
+          border: "1px solid #3c3e58",
           borderRadius: 10,
           padding: 12,
-          background: "#ffffff",
+          background: "#171824",
           display: "grid",
           gap: 10
         }}
@@ -1163,28 +1321,28 @@ export function FileAdminPage() {
         {showAuditHistory ? (
           <section style={{ display: "grid", gap: 6 }}>
             {auditHistoryError ? (
-              <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+              <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
                 歷史載入失敗：{auditHistoryError}
               </div>
             ) : null}
-            {auditHistoryLoading ? <div style={{ color: "#374151" }}>載入歷史中...</div> : null}
+            {auditHistoryLoading ? <div style={{ color: "#c9ccd8" }}>載入歷史中...</div> : null}
             {!auditHistoryLoading && (auditHistory?.items.length ?? 0) === 0 ? (
-              <div style={{ color: "#6b7280" }}>目前沒有操作歷史。</div>
+              <div style={{ color: "#9699b0" }}>目前沒有操作歷史。</div>
             ) : (
               auditHistory?.items.map((item) => <AuditHistoryCard key={item.id} item={item} />)
             )}
           </section>
         ) : (
-          <div style={{ color: "#6b7280" }}>可檢視最近 20 筆 reconcile/cleanup 套用紀錄。</div>
+          <div style={{ color: "#9699b0" }}>可檢視最近 20 筆 reconcile/cleanup 套用紀錄。</div>
         )}
       </section>
 
       <section
         style={{
-          border: "1px solid #e5e7eb",
+          border: "1px solid #3c3e58",
           borderRadius: 10,
           padding: 12,
-          background: "#ffffff",
+          background: "#171824",
           display: "grid",
           gap: 10
         }}
@@ -1211,7 +1369,7 @@ export function FileAdminPage() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
             <thead>
-              <tr style={{ background: "#f9fafb" }}>
+              <tr style={{ background: "#111220" }}>
                 <th style={cellHeadStyle}>
                   <input
                     type="checkbox"
@@ -1236,7 +1394,7 @@ export function FileAdminPage() {
             </thead>
             <tbody>
               {data?.items.map((item) => (
-                <tr key={item.video_id} style={{ borderTop: "1px solid #f3f4f6" }}>
+                <tr key={item.video_id} style={{ borderTop: "1px solid #252638" }}>
                   <td style={cellBodyStyle}>
                     <input
                       type="checkbox"
@@ -1323,7 +1481,7 @@ export function FileAdminPage() {
               {!isLoading && (data?.items.length ?? 0) === 0 ? (
                 <tr>
                   <td
-                    style={{ ...cellBodyStyle, textAlign: "center", color: "#6b7280" }}
+                    style={{ ...cellBodyStyle, textAlign: "center", color: "#7880a0" }}
                     colSpan={1 + visibleDataColumnCount}
                   >
                     查無資料
@@ -1335,24 +1493,24 @@ export function FileAdminPage() {
         </div>
 
         {error ? (
-          <div style={{ background: "#fef2f2", color: "#991b1b", padding: 10, borderRadius: 8 }}>{error}</div>
+          <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>{error}</div>
         ) : null}
         {consistencyError ? (
-          <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
             操作失敗：{consistencyError}
           </div>
         ) : null}
         {cleanupError ? (
-          <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
             清理失敗：{cleanupError}
           </div>
         ) : null}
         {reconcileMessage ? (
-          <div style={{ background: "#eff6ff", color: "#1e3a8a", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "rgba(79,140,255,0.1)", color: "#4f8cff", padding: 10, borderRadius: 8 }}>
             {reconcileMessage}
           </div>
         ) : null}
-        {isLoading ? <div style={{ color: "#374151" }}>載入中...</div> : null}
+        {isLoading ? <div style={{ color: "#c9ccd8" }}>載入中...</div> : null}
 
         <footer style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>
@@ -1380,10 +1538,10 @@ export function FileAdminPage() {
       {selectedVideoDetail ? (
         <section
           style={{
-            border: "1px solid #e5e7eb",
+            border: "1px solid #3c3e58",
             borderRadius: 10,
             padding: 12,
-            background: "#ffffff",
+            background: "#171824",
             display: "grid",
             gap: 10
           }}
@@ -1448,13 +1606,13 @@ export function FileAdminPage() {
           <section style={{ display: "grid", gap: 6 }}>
             <strong>related history</strong>
             {videoHistoryError ? (
-              <div style={{ background: "#fff1f2", color: "#9f1239", padding: 10, borderRadius: 8 }}>
+              <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: 10, borderRadius: 8 }}>
                 歷史載入失敗：{videoHistoryError}
               </div>
             ) : null}
-            {videoHistoryLoading ? <div style={{ color: "#374151" }}>載入歷史中...</div> : null}
+            {videoHistoryLoading ? <div style={{ color: "#c9ccd8" }}>載入歷史中...</div> : null}
             {!videoHistoryLoading && (videoHistory?.items.length ?? 0) === 0 ? (
-              <div style={{ color: "#6b7280" }}>此影片目前無歷史紀錄。</div>
+              <div style={{ color: "#9699b0" }}>此影片目前無歷史紀錄。</div>
             ) : (
               videoHistory?.items.map((item) => <AuditHistoryCard key={`detail-${item.id}`} item={item} />)
             )}
@@ -1465,10 +1623,10 @@ export function FileAdminPage() {
       {consistencyDetail ? (
         <section
           style={{
-            border: "1px solid #e5e7eb",
+            border: "1px solid #3c3e58",
             borderRadius: 10,
             padding: 12,
-            background: "#ffffff",
+            background: "#171824",
             display: "grid",
             gap: 10
           }}
@@ -1479,7 +1637,7 @@ export function FileAdminPage() {
               關閉
             </button>
           </header>
-          <div style={{ display: "grid", gap: 6, color: "#1f2937" }}>
+          <div style={{ display: "grid", gap: 6, color: "#c9ccd8" }}>
             <div>
               video_id: <code>{consistencyDetail.videoId}</code>
             </div>
@@ -1491,7 +1649,7 @@ export function FileAdminPage() {
           <section style={{ display: "grid", gap: 6 }}>
             <strong>problems</strong>
             {consistencyDetail.problems.length === 0 ? (
-              <div style={{ color: "#065f46", background: "#ecfdf5", borderRadius: 8, padding: 8 }}>
+              <div style={{ color: "#34d399", background: "rgba(52,211,153,0.1)", borderRadius: 8, padding: 8 }}>
                 無異常，狀態健康。
               </div>
             ) : (
@@ -1504,7 +1662,7 @@ export function FileAdminPage() {
           <section style={{ display: "grid", gap: 6 }}>
             <strong>suggested actions</strong>
             {consistencyDetail.suggestedActions.length === 0 ? (
-              <div style={{ color: "#6b7280" }}>目前無建議操作。</div>
+              <div style={{ color: "#9699b0" }}>目前無建議操作。</div>
             ) : (
               consistencyDetail.suggestedActions.map((action, index) => (
                 <ActionCard key={`${action.code}-${action.mode}-${index}`} action={action} />
@@ -1517,10 +1675,10 @@ export function FileAdminPage() {
       {cleanupDetail ? (
         <section
           style={{
-            border: "1px solid #e5e7eb",
+            border: "1px solid #3c3e58",
             borderRadius: 10,
             padding: 12,
-            background: "#ffffff",
+            background: "#171824",
             display: "grid",
             gap: 10
           }}
@@ -1563,7 +1721,7 @@ export function FileAdminPage() {
           <section style={{ display: "grid", gap: 6 }}>
             <strong>candidates</strong>
             {cleanupDetail.candidates.length === 0 ? (
-              <div style={{ color: "#6b7280" }}>無資料。</div>
+              <div style={{ color: "#9699b0" }}>無資料。</div>
             ) : (
               cleanupDetail.candidates.map((candidate) => (
                 <CleanupCandidateCard key={candidate.videoId} candidate={candidate} />
@@ -1580,11 +1738,11 @@ function ProblemCard({ problem }: { problem: AdminFileConsistencyProblem }) {
   return (
     <div
       style={{
-        border: "1px solid #fecaca",
-        background: "#fff7ed",
+        border: "1px solid rgba(248,113,113,0.4)",
+        background: "rgba(248,113,113,0.08)",
         borderRadius: 8,
         padding: 8,
-        color: "#7c2d12"
+        color: "#f87171"
       }}
     >
       <div>
@@ -1604,11 +1762,11 @@ function ActionCard({ action }: { action: AdminFileConsistencyAction }) {
   return (
     <div
       style={{
-        border: "1px solid #bfdbfe",
-        background: "#eff6ff",
+        border: "1px solid rgba(79,140,255,0.4)",
+        background: "rgba(79,140,255,0.08)",
         borderRadius: 8,
         padding: 8,
-        color: "#1e3a8a"
+        color: "#4f8cff"
       }}
     >
       <div>
@@ -1623,11 +1781,11 @@ function CleanupCandidateCard({ candidate }: { candidate: AdminFileCleanupCandid
   return (
     <div
       style={{
-        border: "1px solid #d1d5db",
-        background: candidate.candidate ? "#fef3c7" : "#f9fafb",
+        border: "1px solid #3c3e58",
+        background: candidate.candidate ? "rgba(251,191,36,0.08)" : "#171824",
         borderRadius: 8,
         padding: 8,
-        color: "#1f2937"
+        color: "#c9ccd8"
       }}
     >
       <div>
@@ -1647,34 +1805,56 @@ function RiskSummaryCard({ title, value }: { title: string; value: number }) {
   return (
     <div
       style={{
-        border: "1px solid #dbeafe",
+        border: "1px solid rgba(79,140,255,0.3)",
         borderRadius: 8,
-        background: "#eff6ff",
+        background: "rgba(79,140,255,0.07)",
         padding: 10,
-        color: "#1e3a8a"
+        color: "#c9ccd8"
       }}
     >
-      <div style={{ fontSize: 12 }}>{title}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#9699b0" }}>{title}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: "#e2e3f0" }}>{value}</div>
     </div>
   );
 }
 
 function RiskEventCard({
   item,
-  onOpenVideoDetail
+  onOpenVideoDetail,
+  onPatch,
+  disabled
 }: {
   item: AdminFileRiskEventItem;
   onOpenVideoDetail: (videoId: string) => void;
+  onPatch: (
+    item: AdminFileRiskEventItem,
+    patch: {
+      severity?: "P0" | "P1" | "P2";
+      status?: "OPEN" | "RESOLVED";
+      owner?: string;
+      latestNote?: string;
+    }
+  ) => Promise<void>;
+  disabled: boolean;
 }) {
+  const [severityInput, setSeverityInput] = useState<"P0" | "P1" | "P2">(item.severity);
+  const [ownerInput, setOwnerInput] = useState(item.owner ?? "");
+  const [noteInput, setNoteInput] = useState(item.latest_note ?? "");
+
+  useEffect(() => {
+    setSeverityInput(item.severity);
+    setOwnerInput(item.owner ?? "");
+    setNoteInput(item.latest_note ?? "");
+  }, [item.latest_note, item.owner, item.severity]);
+
   return (
     <div
       style={{
-        border: "1px solid #e5e7eb",
+        border: "1px solid #3c3e58",
         borderRadius: 8,
         padding: 8,
-        background: item.status === "OPEN" ? "#fff7ed" : "#f0fdf4",
-        color: "#1f2937"
+        background: item.status === "OPEN" ? "rgba(251,191,36,0.06)" : "rgba(52,211,153,0.06)",
+        color: "#c9ccd8"
       }}
     >
       <div>
@@ -1685,13 +1865,65 @@ function RiskEventCard({
       <div>resolved: {formatTime(item.resolved_time)}</div>
       <div>source: {item.trigger_source ?? "-"}</div>
       <div>note: {item.latest_note ?? "-"}</div>
-      {item.video_id ? (
-        <div style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+        <select
+          value={severityInput}
+          onChange={(event) => setSeverityInput(event.target.value as "P0" | "P1" | "P2")}
+          disabled={disabled}
+          style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db", minWidth: 82 }}
+        >
+          <option value="P0">P0</option>
+          <option value="P1">P1</option>
+          <option value="P2">P2</option>
+        </select>
+        <input
+          type="text"
+          value={ownerInput}
+          onChange={(event) => setOwnerInput(event.target.value)}
+          placeholder="owner"
+          disabled={disabled}
+          style={{ minWidth: 140, padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db" }}
+        />
+        <input
+          type="text"
+          value={noteInput}
+          onChange={(event) => setNoteInput(event.target.value)}
+          placeholder="latestNote"
+          disabled={disabled}
+          style={{ minWidth: 240, flex: "1 1 260px", padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db" }}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() =>
+            void onPatch(item, {
+              severity: severityInput,
+              owner: ownerInput.trim(),
+              latestNote: noteInput.trim()
+            })
+          }
+        >
+          儲存欄位
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() =>
+            void onPatch(item, {
+              status: item.status === "OPEN" ? "RESOLVED" : "OPEN"
+            })
+          }
+        >
+          {item.status === "OPEN" ? "標記 RESOLVED" : "重新開啟 OPEN"}
+        </button>
+        {item.video_id ? (
           <button type="button" onClick={() => onOpenVideoDetail(item.video_id ?? "")}>
             打開影片詳情
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1700,11 +1932,11 @@ function AuditHistoryCard({ item }: { item: AdminFileAuditHistoryItem }) {
   return (
     <div
       style={{
-        border: "1px solid #e5e7eb",
+        border: "1px solid #3c3e58",
         borderRadius: 8,
         padding: 8,
-        background: "#f9fafb",
-        color: "#111827"
+        background: "#111220",
+        color: "#c9ccd8"
       }}
     >
       <div>
@@ -1724,9 +1956,9 @@ function AuditHistoryCard({ item }: { item: AdminFileAuditHistoryItem }) {
 const cellHeadStyle: CSSProperties = {
   textAlign: "left",
   padding: "10px 8px",
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom: "1px solid #3c3e58",
   fontSize: 12,
-  color: "#4b5563",
+  color: "#9699b0",
   whiteSpace: "nowrap"
 };
 
@@ -1742,7 +1974,7 @@ const columnToggleLabelStyle: CSSProperties = {
   gap: 6,
   padding: "4px 8px",
   borderRadius: 8,
-  border: "1px solid #e5e7eb",
-  background: "#fafafa",
+  border: "1px solid #3c3e58",
+  background: "#171824",
   fontSize: 12
 };

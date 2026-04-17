@@ -61,8 +61,8 @@ export function TopBar(props: TopBarProps) {
     <header
       style={{
         height: 48,
-        background: "#13141f",
-        borderBottom: "1px solid #1e2035",
+        background: "#0f1018",
+        borderBottom: "1px solid #252638",
         display: "flex",
         alignItems: "center",
         paddingLeft: 16,
@@ -94,7 +94,7 @@ export function TopBar(props: TopBarProps) {
         </span>
       </div>
 
-      <div style={{ width: 1, height: 20, background: "#2e2f45", flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: "#3c3e58", flexShrink: 0 }} />
 
       {/* Upload controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -120,7 +120,7 @@ export function TopBar(props: TopBarProps) {
         )}
 
         {uploadTask.isUploading && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#7c7e9a", fontSize: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#c9ccd8", fontSize: 12 }}>
             <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
             {uploadTask.progressPercent}%
           </div>
@@ -189,15 +189,15 @@ export function TopBar(props: TopBarProps) {
                 top: "calc(100% + 4px)",
                 right: 0,
                 zIndex: 50,
-                background: "#1a1b28",
-                border: "1px solid #2e2f45",
+                background: "#171824",
+                border: "1px solid #3c3e58",
                 borderRadius: 8,
                 padding: "4px 0",
                 minWidth: 180,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.4)"
               }}
             >
-              <div style={{ padding: "4px 12px 6px", fontSize: 11, color: "#5a5c7a", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div style={{ padding: "4px 12px 6px", fontSize: 11, color: "#9699b0", textTransform: "uppercase", letterSpacing: 0.5 }}>
                 影片操作
               </div>
               <button
@@ -218,7 +218,7 @@ export function TopBar(props: TopBarProps) {
                 <Trash2 size={13} />
                 {isClearingAi ? "清除中..." : "清除 AI 結果"}
               </button>
-              <div style={{ height: 1, background: "#2e2f45", margin: "4px 0" }} />
+              <div style={{ height: 1, background: "#3c3e58", margin: "4px 0" }} />
               <button
                 type="button"
                 onClick={() => { onClearFrontendState(); setSettingsOpen(false); }}
@@ -264,7 +264,7 @@ function btnStyle(variant: "primary" | "ghost", disabled: boolean): React.CSSPro
   if (variant === "primary") {
     return { ...base, background: "#4f8cff", color: "#fff" };
   }
-  return { ...base, background: "transparent", color: "#9a9bbf" };
+  return { ...base, background: "transparent", color: "#d4d6f0" };
 }
 
 function menuItemStyle(variant: "danger" | "muted", disabled: boolean): React.CSSProperties {
@@ -280,7 +280,7 @@ function menuItemStyle(variant: "danger" | "muted", disabled: boolean): React.CS
     fontFamily: "inherit",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.4 : 1,
-    color: variant === "danger" ? "#f87171" : "#9a9bbf",
+    color: variant === "danger" ? "#f87171" : "#d4d6f0",
     textAlign: "left"
   };
 }

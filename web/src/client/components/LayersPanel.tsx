@@ -217,7 +217,7 @@ export function LayersPanel(props: LayersPanelProps) {
         flexDirection: "column",
         height: "100%",
         overflow: "hidden",
-        background: "#13141f"
+        background: "#0f1018"
       }}
     >
       {/* Panel header */}
@@ -227,12 +227,12 @@ export function LayersPanel(props: LayersPanelProps) {
           alignItems: "center",
           height: 38,
           padding: "0 10px",
-          borderBottom: "1px solid #1e2035",
+          borderBottom: "1px solid #252638",
           flexShrink: 0,
           gap: 6
         }}
       >
-        <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#5a5c7a", textTransform: "uppercase", letterSpacing: 0.8 }}>圖層面板</span>
+        <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#9699b0", textTransform: "uppercase", letterSpacing: 0.8 }}>圖層面板</span>
         <button
           type="button"
           onClick={() => void loadLayerData()}
@@ -241,7 +241,7 @@ export function LayersPanel(props: LayersPanelProps) {
           style={{
             padding: 4, background: "none", border: "none",
             cursor: !videoId || isLoading ? "not-allowed" : "pointer",
-            color: !videoId || isLoading ? "#2e2f45" : "#5a5c7a",
+            color: !videoId || isLoading ? "#3c3e58" : "#9699b0",
             display: "flex", alignItems: "center", borderRadius: 4
           }}
         >
@@ -289,8 +289,8 @@ export function LayersPanel(props: LayersPanelProps) {
             >
               {layerState.categoryMasterVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
-            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#9a9bbf" }}>類別圖層</span>
-            <span style={{ fontSize: 10, color: "#4b5580" }}>
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#d4d6f0" }}>類別圖層</span>
+            <span style={{ fontSize: 10, color: "#7880a0" }}>
               {visibleCategoryCount}/{categories.length}
             </span>
           </div>
@@ -323,7 +323,7 @@ export function LayersPanel(props: LayersPanelProps) {
 
           {/* Category list */}
           {categories.length === 0 && (
-            <div style={{ fontSize: 12, color: "#3a3c55", padding: "4px 0" }}>尚無類別資料</div>
+            <div style={{ fontSize: 12, color: "#585a78", padding: "4px 0" }}>尚無類別資料</div>
           )}
           {categories.map((category) => {
             const rowVisible = layerState.categoryMasterVisible && category.is_visible !== 0;
@@ -343,10 +343,10 @@ export function LayersPanel(props: LayersPanelProps) {
                 >
                   {rowVisible ? <Eye size={11} /> : <EyeOff size={11} />}
                 </button>
-                <span style={{ flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#4b5580", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#7880a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {category.name}
                 </span>
-                <span style={{ fontSize: 10, color: "#3a3c55", flexShrink: 0 }}>#{category.annotation_count}</span>
+                <span style={{ fontSize: 10, color: "#585a78", flexShrink: 0 }}>#{category.annotation_count}</span>
                 {category.source !== "AI" && (
                   <button
                     type="button"
@@ -364,7 +364,7 @@ export function LayersPanel(props: LayersPanelProps) {
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "#1e2035", margin: "0 0" }} />
+        <div style={{ height: 1, background: "#252638", margin: "0 0" }} />
 
         {/* ── Section 2: 標註圖層 ── */}
         <div style={{ padding: "8px 10px 10px" }}>
@@ -378,7 +378,7 @@ export function LayersPanel(props: LayersPanelProps) {
             >
               {layerState.annotationVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
-            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#9a9bbf" }}>標註圖層</span>
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#d4d6f0" }}>標註圖層</span>
             <button
               type="button"
               onClick={() => setFrameNavIndex((i) => Math.max(0, i - 1))}
@@ -392,8 +392,8 @@ export function LayersPanel(props: LayersPanelProps) {
               style={{
                 minWidth: 28, textAlign: "center", padding: "0 4px",
                 height: 22, lineHeight: "22px",
-                background: "#1a1b28", border: "1px solid #2e2f45",
-                borderRadius: 5, fontSize: 11, color: "#9a9bbf",
+                background: "#171824", border: "1px solid #3c3e58",
+                borderRadius: 5, fontSize: 11, color: "#d4d6f0",
                 fontVariantNumeric: "tabular-nums"
               }}
             >
@@ -415,9 +415,9 @@ export function LayersPanel(props: LayersPanelProps) {
               style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 width: 22, height: 22, borderRadius: 5, border: "1px solid",
-                borderColor: showAddForm ? "rgba(79,140,255,0.3)" : "#2e2f45",
+                borderColor: showAddForm ? "rgba(79,140,255,0.3)" : "#3c3e58",
                 background: showAddForm ? "rgba(79,140,255,0.15)" : "transparent",
-                color: showAddForm ? "#4f8cff" : "#5a5c7a",
+                color: showAddForm ? "#4f8cff" : "#9699b0",
                 cursor: !videoId ? "not-allowed" : "pointer", flexShrink: 0
               }}
               title={showAddForm ? "收合" : "新增標註"}
@@ -430,7 +430,7 @@ export function LayersPanel(props: LayersPanelProps) {
           {(showAddForm || editingAnnotationId) && (
             <div
               style={{
-                background: "#1a1b28", border: "1px solid #2e2f45",
+                background: "#171824", border: "1px solid #3c3e58",
                 borderRadius: 6, padding: "8px 8px 6px",
                 marginBottom: 10, display: "flex", flexDirection: "column", gap: 5
               }}
@@ -456,7 +456,7 @@ export function LayersPanel(props: LayersPanelProps) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                 {([["x", bboxX, setBboxX], ["y", bboxY, setBboxY], ["w", bboxW, setBboxW], ["h", bboxH, setBboxH]] as const).map(([label, val, setter]) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                    <span style={{ fontSize: 10, color: "#5a5c7a", width: 10, flexShrink: 0 }}>{label}</span>
+                    <span style={{ fontSize: 10, color: "#9699b0", width: 10, flexShrink: 0 }}>{label}</span>
                     <input
                       value={val}
                       onChange={(e) => setter(e.target.value)}
@@ -486,7 +486,7 @@ export function LayersPanel(props: LayersPanelProps) {
 
           {/* Empty state */}
           {visibleAnnotations.length === 0 && (
-            <div style={{ fontSize: 12, color: "#3a3c55", padding: "4px 0", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#585a78", padding: "4px 0", textAlign: "center" }}>
               {annotations.length === 0 ? "尚無人工標註" : "此幀無標註"}
             </div>
           )}
@@ -507,11 +507,11 @@ export function LayersPanel(props: LayersPanelProps) {
                     style={{
                       display: "flex", alignItems: "center", height: 34, gap: 5, padding: "0 6px",
                       borderRadius: isInfoOpen ? "6px 6px 0 0" : 6,
-                      border: `1px solid ${isEditing ? "rgba(79,140,255,0.4)" : "#2e2f45"}`,
-                      background: isEditing ? "rgba(79,140,255,0.06)" : "#1a1b28"
+                      border: `1px solid ${isEditing ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
+                      background: isEditing ? "rgba(79,140,255,0.06)" : "#171824"
                     }}
                   >
-                    <Square size={13} style={{ color: "#4b5580", flexShrink: 0 }} />
+                    <Square size={13} style={{ color: "#7880a0", flexShrink: 0 }} />
                     <div
                       style={{
                         display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 4,
@@ -519,7 +519,7 @@ export function LayersPanel(props: LayersPanelProps) {
                         padding: "0 8px 0 6px", height: 22
                       }}
                     >
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: cat?.color ?? "#4b5580", flexShrink: 0 }} />
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: cat?.color ?? "#7880a0", flexShrink: 0 }} />
                       <select
                         value={item.categoryId}
                         onChange={(e) => void handleInlineCategoryChange(item, e.target.value)}
@@ -563,10 +563,10 @@ export function LayersPanel(props: LayersPanelProps) {
                   {isInfoOpen && (
                     <div
                       style={{
-                        padding: "8px 10px", background: "#141520",
-                        border: "1px solid #2e2f45", borderTop: "none",
+                        padding: "8px 10px", background: "#111220",
+                        border: "1px solid #3c3e58", borderTop: "none",
                         borderRadius: "0 0 6px 6px",
-                        fontSize: 11, color: "#7c7e9a",
+                        fontSize: 11, color: "#c9ccd8",
                         display: "flex", flexDirection: "column", gap: 3
                       }}
                     >
@@ -590,7 +590,7 @@ export function LayersPanel(props: LayersPanelProps) {
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "#1e2035" }} />
+        <div style={{ height: 1, background: "#252638" }} />
 
         {/* ── Section 3: AI 圖層 ── */}
         <div style={{ padding: "8px 10px 12px" }}>
@@ -603,36 +603,38 @@ export function LayersPanel(props: LayersPanelProps) {
             >
               {layerState.aiVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
-            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#9a9bbf" }}>AI 圖層</span>
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#d4d6f0" }}>AI 圖層</span>
             {aiOverlay.hasData && currentDisplayIndex !== null && (
-              <span style={{ fontSize: 10, color: "#4b5580", fontVariantNumeric: "tabular-nums" }}>f:{currentDisplayIndex}</span>
+              <span style={{ fontSize: 10, color: "#7880a0", fontVariantNumeric: "tabular-nums" }}>f:{currentDisplayIndex}</span>
             )}
           </div>
 
           {/* Display options */}
-          {[
-            { label: "BBox 框", value: layerState.aiShowBBox, toggle: () => layerState.setAiShowBBox(!layerState.aiShowBBox) },
-            { label: "Track ID", value: layerState.aiShowTrackId, toggle: () => layerState.setAiShowTrackId(!layerState.aiShowTrackId) },
-            { label: "軌跡線", value: layerState.aiShowTrajectory, toggle: () => layerState.setAiShowTrajectory(!layerState.aiShowTrajectory) }
-          ].map((opt) => (
-            <label
-              key={opt.label}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px", marginBottom: 2, cursor: "pointer", borderRadius: 4 }}
-            >
-              <input type="checkbox" checked={opt.value} onChange={opt.toggle} />
-              <span style={{ fontSize: 12, color: opt.value ? "#c8cae8" : "#5a5c7a" }}>{opt.label}</span>
-            </label>
-          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "4px 0", marginBottom: 4, flexWrap: "wrap" }}>
+            {[
+              { label: "BBox 框", value: layerState.aiShowBBox, toggle: () => layerState.setAiShowBBox(!layerState.aiShowBBox) },
+              { label: "Track ID", value: layerState.aiShowTrackId, toggle: () => layerState.setAiShowTrackId(!layerState.aiShowTrackId) },
+              { label: "軌跡線", value: layerState.aiShowTrajectory, toggle: () => layerState.setAiShowTrajectory(!layerState.aiShowTrajectory) }
+            ].map((opt) => (
+              <label
+                key={opt.label}
+                style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}
+              >
+                <input type="checkbox" checked={opt.value} onChange={opt.toggle} />
+                <span style={{ fontSize: 12, color: opt.value ? "#c8cae8" : "#9699b0" }}>{opt.label}</span>
+              </label>
+            ))}
+          </div>
 
           {/* AI detection rows */}
           {aiOverlay.loading && (
-            <div style={{ fontSize: 11, color: "#4b5580", padding: "8px 0", textAlign: "center" }}>載入中…</div>
+            <div style={{ fontSize: 11, color: "#7880a0", padding: "8px 0", textAlign: "center" }}>載入中…</div>
           )}
           {!aiOverlay.loading && !aiOverlay.hasData && aiStatus === "DONE" && (
-            <div style={{ fontSize: 11, color: "#3a3c55", padding: "8px 0", textAlign: "center" }}>無 AI 資料</div>
+            <div style={{ fontSize: 11, color: "#585a78", padding: "8px 0", textAlign: "center" }}>無 AI 資料</div>
           )}
           {!aiOverlay.loading && aiOverlay.hasData && aiCurrentDetections.length === 0 && (
-            <div style={{ fontSize: 11, color: "#3a3c55", padding: "8px 0", textAlign: "center" }}>此幀無偵測結果</div>
+            <div style={{ fontSize: 11, color: "#585a78", padding: "8px 0", textAlign: "center" }}>此兤無偉測結果</div>
           )}
           {!aiOverlay.loading && aiCurrentDetections.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 8 }}>
@@ -643,18 +645,18 @@ export function LayersPanel(props: LayersPanelProps) {
                     display: "flex", alignItems: "center", height: 30, gap: 6,
                     padding: "0 8px",
                     borderRadius: 5,
-                    border: "1px solid #2e2f45",
-                    background: "#1a1b28",
+                    border: "1px solid #3c3e58",
+                    background: "#171824",
                     fontVariantNumeric: "tabular-nums"
                   }}
                 >
-                  <span style={{ fontSize: 10, color: "#4b5580", width: 20, flexShrink: 0, textAlign: "right" }}>
-                    {idx + 1}
+                  <span style={{ fontSize: 10, color: "#7880a0", width: 32, flexShrink: 0, textAlign: "right" }}>
+                    {det.trackId !== null ? `#${det.trackId}` : `${idx + 1}`}
                   </span>
-                  <span style={{ fontSize: 11, color: "#9a9bbf", flex: "0 0 auto", minWidth: 40 }}>
+                  <span style={{ fontSize: 11, color: "#d4d6f0", flex: "0 0 auto", minWidth: 40 }}>
                     {det.categoryName}
                   </span>
-                  <span style={{ fontSize: 10, color: "#5a5c7a", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 10, color: "#9699b0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     [{Math.round(det.x)}, {Math.round(det.y)}, {Math.round(det.width)}, {Math.round(det.height)}]
                   </span>
                 </div>
@@ -672,8 +674,8 @@ export function LayersPanel(props: LayersPanelProps) {
 
 function iconBtnStyle(active: boolean, variant?: "danger"): React.CSSProperties {
   const color = variant === "danger"
-    ? (active ? "#f87171" : "#4b5580")
-    : (active ? "#4f8cff" : "#4b5580");
+    ? (active ? "#f87171" : "#7880a0")
+    : (active ? "#4f8cff" : "#7880a0");
 
   return {
     display: "inline-flex",
@@ -694,7 +696,7 @@ function iconBtnStyle(active: boolean, variant?: "danger"): React.CSSProperties 
 function actionBtnStyle(variant: "primary" | "ghost" | "danger", disabled: boolean): React.CSSProperties {
   const styles: Record<string, React.CSSProperties> = {
     primary: { background: "rgba(79,140,255,0.15)", border: "1px solid rgba(79,140,255,0.3)", color: "#4f8cff" },
-    ghost: { background: "transparent", border: "1px solid #2e2f45", color: "#7c7e9a" },
+    ghost: { background: "transparent", border: "1px solid #3c3e58", color: "#c9ccd8" },
     danger: { background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", color: "#f87171" }
   };
 

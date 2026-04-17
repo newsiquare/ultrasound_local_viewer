@@ -21,8 +21,8 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
         alignItems: "center",
         gap: 4,
         padding: "4px 8px",
-        background: "#13141f",
-        borderBottom: "1px solid #1e2035",
+        background: "#0f1018",
+        borderBottom: "1px solid #252638",
         flexShrink: 0,
         flexWrap: "wrap"
       }}
@@ -37,7 +37,7 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
             minWidth: 52,
             textAlign: "center",
             fontSize: 11,
-            color: "#7c7e9a",
+            color: "#c9ccd8",
             padding: "0 4px",
             fontVariantNumeric: "tabular-nums"
           }}
@@ -109,8 +109,8 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
                 top: "calc(100% + 6px)",
                 left: 0,
                 zIndex: 50,
-                background: "#1a1b28",
-                border: "1px solid #2e2f45",
+                background: "#171824",
+                border: "1px solid #3c3e58",
                 borderRadius: 8,
                 padding: 12,
                 minWidth: 200,
@@ -120,7 +120,7 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
               }}
             >
               <label style={{ display: "grid", gap: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#7c7e9a" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#c9ccd8" }}>
                   <span>對比</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{tools.contrast > 0 ? "+" : ""}{tools.contrast}</span>
                 </div>
@@ -135,7 +135,7 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
                 />
               </label>
               <label style={{ display: "grid", gap: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#7c7e9a" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#c9ccd8" }}>
                   <span>亮度</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{tools.brightness > 0 ? "+" : ""}{tools.brightness}</span>
                 </div>
@@ -154,9 +154,9 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
                 onClick={() => { tools.setContrast(0); tools.setBrightness(0); }}
                 style={{
                   fontSize: 11,
-                  color: "#5a5c7a",
+                  color: "#9699b0",
                   background: "none",
-                  border: "1px solid #2e2f45",
+                  border: "1px solid #3c3e58",
                   borderRadius: 4,
                   padding: "3px 8px",
                   cursor: "pointer",
@@ -197,7 +197,7 @@ function ToolBtn(props: {
         borderRadius: 5,
         border: active ? "1px solid rgba(79,140,255,0.4)" : "1px solid transparent",
         background: active ? "rgba(79,140,255,0.15)" : "transparent",
-        color: active ? "#4f8cff" : disabled ? "#2e3052" : "#7c7e9a",
+        color: active ? "#4f8cff" : disabled ? "#52547a" : "#c9ccd8",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
         transition: "background 0.1s, color 0.1s",
@@ -210,5 +210,5 @@ function ToolBtn(props: {
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 18, background: "#1e2035", flexShrink: 0, margin: "0 2px" }} />;
+  return <div style={{ width: 1, height: 18, background: "#252638", flexShrink: 0, margin: "0 2px" }} />;
 }

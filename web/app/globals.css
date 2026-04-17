@@ -9,7 +9,7 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: #0d0e1a;
+  background: #0a0b14;
   color: #e2e3f0;
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 14px;
@@ -29,11 +29,11 @@ html, body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2e3052;
+  background: #52547a;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3e415e;
+  background: #5a5c80;
 }
 
 /* Range input */
@@ -44,9 +44,9 @@ input[type="range"] {
 
 /* Select */
 select {
-  background: #1a1b28;
+  background: #171824;
   color: #e2e3f0;
-  border: 1px solid #2e2f45;
+  border: 1px solid #3c3e58;
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 13px;
@@ -62,9 +62,9 @@ select:focus {
 /* Text inputs */
 input[type="text"],
 input[type="number"] {
-  background: #1a1b28;
+  background: #171824;
   color: #e2e3f0;
-  border: 1px solid #2e2f45;
+  border: 1px solid #3c3e58;
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 13px;
@@ -79,7 +79,7 @@ input[type="number"]:focus {
 
 input[type="text"]::placeholder,
 input[type="number"]::placeholder {
-  color: #5a5c7a;
+  color: #9699b0;
 }
 
 /* Checkbox */
@@ -93,11 +93,31 @@ input[type="checkbox"] {
 
 /* Color input */
 input[type="color"] {
-  border: 1px solid #2e2f45;
+  border: 1px solid #3c3e58;
   border-radius: 4px;
   padding: 1px;
-  background: #1a1b28;
+  background: #171824;
   cursor: pointer;
   width: 32px;
   height: 28px;
+}
+
+/* Date input */
+input[type="date"] {
+  background: #171824;
+  color: #e2e3f0;
+  border: 1px solid #3c3e58;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+/* Admin page: force dark borders on all inline-styled inputs/selects */
+.admin-page input,
+.admin-page select {
+  border-color: #3c3e58 !important;
+  background-color: #171824 !important;
+  color: #e2e3f0 !important;
 }
