@@ -60,6 +60,36 @@ type ColumnKey =
   | "consistency"
   | "actions";
 
+const FILE_ADMIN_PREFS_KEY = "file-admin-preferences:v1";
+const DEFAULT_COLUMN_VISIBILITY: Record<ColumnKey, boolean> = {
+  video_id: true,
+  filename: true,
+  uploaded_at: true,
+  category_annotation: true,
+  ai_status: true,
+  ai_category_annotation: true,
+  consistency: true,
+  actions: true
+};
+
+interface FileAdminPreferences {
+  qInput?: string;
+  q?: string;
+  dateFromInput?: string;
+  dateToInput?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: SortByValue;
+  sortDir?: "asc" | "desc";
+  aiStatus?: (typeof AI_STATUS_OPTIONS)[number];
+  consistencyStatus?: (typeof CONSISTENCY_STATUS_OPTIONS)[number];
+  pageSize?: number;
+  columnVisibility?: Partial<Record<ColumnKey, boolean>>;
+  showRiskEvents?: boolean;
+  riskStatusFilter?: "OPEN" | "RESOLVED";
+  showAuditHistory?: boolean;
+}
+
 function formatTime(value: string | null): string {
   if (!value) {
     return "-";
@@ -112,7 +142,24 @@ function consistencyTooltip(item: AdminFileListItem): string {
   ].join("\n");
 }
 
+function parseStoredPreferences(): FileAdminPreferences | null {
+  try {
+    const raw = window.localStorage.getItem(FILE_ADMIN_PREFS_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as FileAdminPreferences;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function FileAdminPage() {
+  const [isPrefsHydrated, setIsPrefsHydrated] = useState(false);
   const [data, setData] = useState<AdminFileListData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,16 +208,9 @@ export function FileAdminPage() {
     useState<(typeof CONSISTENCY_STATUS_OPTIONS)[number]>("ALL");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
-  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>({
-    video_id: true,
-    filename: true,
-    uploaded_at: true,
-    category_annotation: true,
-    ai_status: true,
-    ai_category_annotation: true,
-    consistency: true,
-    actions: true
-  });
+  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>(
+    DEFAULT_COLUMN_VISIBILITY
+  );
 
   const loadList = useCallback(async () => {
     setIsLoading(true);
@@ -257,9 +297,113 @@ export function FileAdminPage() {
   }, []);
 
   useEffect(() => {
+    const stored = parseStoredPreferences();
+    if (stored) {
+      if (typeof stored.qInput === "string") {
+        setQInput(stored.qInput);
+      }
+      if (typeof stored.q === "string") {
+        setQ(stored.q);
+      }
+      if (typeof stored.dateFromInput === "string") {
+        setDateFromInput(stored.dateFromInput);
+      }
+      if (typeof stored.dateToInput === "string") {
+        setDateToInput(stored.dateToInput);
+      }
+      if (typeof stored.dateFrom === "string" || stored.dateFrom === undefined) {
+        setDateFrom(stored.dateFrom);
+      }
+      if (typeof stored.dateTo === "string" || stored.dateTo === undefined) {
+        setDateTo(stored.dateTo);
+      }
+
+      if (stored.sortBy && SORT_BY_OPTIONS.some((option) => option.value === stored.sortBy)) {
+        setSortBy(stored.sortBy);
+      }
+      if (stored.sortDir === "asc" || stored.sortDir === "desc") {
+        setSortDir(stored.sortDir);
+      }
+      if (stored.aiStatus && AI_STATUS_OPTIONS.includes(stored.aiStatus)) {
+        setAiStatus(stored.aiStatus);
+      }
+      if (stored.consistencyStatus && CONSISTENCY_STATUS_OPTIONS.includes(stored.consistencyStatus)) {
+        setConsistencyStatus(stored.consistencyStatus);
+      }
+      if (
+        typeof stored.pageSize === "number" &&
+        Number.isFinite(stored.pageSize) &&
+        [20, 50, 100].includes(stored.pageSize)
+      ) {
+        setPageSize(stored.pageSize);
+      }
+      if (typeof stored.showRiskEvents === "boolean") {
+        setShowRiskEvents(stored.showRiskEvents);
+      }
+      if (stored.riskStatusFilter === "OPEN" || stored.riskStatusFilter === "RESOLVED") {
+        setRiskStatusFilter(stored.riskStatusFilter);
+      }
+      if (typeof stored.showAuditHistory === "boolean") {
+        setShowAuditHistory(stored.showAuditHistory);
+      }
+      if (stored.columnVisibility && typeof stored.columnVisibility === "object") {
+        setColumnVisibility((current) => ({
+          ...current,
+          ...stored.columnVisibility
+        }));
+      }
+    }
+    setIsPrefsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isPrefsHydrated) {
+      return;
+    }
+    const payload: FileAdminPreferences = {
+      qInput,
+      q,
+      dateFromInput,
+      dateToInput,
+      dateFrom,
+      dateTo,
+      sortBy,
+      sortDir,
+      aiStatus,
+      consistencyStatus,
+      pageSize,
+      columnVisibility,
+      showRiskEvents,
+      riskStatusFilter,
+      showAuditHistory
+    };
+    window.localStorage.setItem(FILE_ADMIN_PREFS_KEY, JSON.stringify(payload));
+  }, [
+    aiStatus,
+    columnVisibility,
+    consistencyStatus,
+    dateFrom,
+    dateFromInput,
+    dateTo,
+    dateToInput,
+    isPrefsHydrated,
+    pageSize,
+    q,
+    qInput,
+    riskStatusFilter,
+    showAuditHistory,
+    showRiskEvents,
+    sortBy,
+    sortDir
+  ]);
+
+  useEffect(() => {
+    if (!isPrefsHydrated) {
+      return;
+    }
     void loadList();
     void loadRiskSummary();
-  }, [loadList, loadRiskSummary]);
+  }, [isPrefsHydrated, loadList, loadRiskSummary]);
 
   const totalPages = useMemo(() => {
     const total = data?.total ?? 0;

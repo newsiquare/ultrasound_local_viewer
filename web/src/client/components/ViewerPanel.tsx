@@ -3,11 +3,13 @@
 import { useMemo, useRef } from "react";
 
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
+import { ViewerImageToolbar } from "@/client/components/ViewerImageToolbar";
 import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
 import { useAiStatusStream } from "@/client/hooks/useAiStatusStream";
 import { useFrameAnnotations } from "@/client/hooks/useFrameAnnotations";
 import { useFrameTimeline } from "@/client/hooks/useFrameTimeline";
 import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
+import { useViewerImageTools } from "@/client/hooks/useViewerImageTools";
 import { AiStatus, AnnotationItem, BootstrapData } from "@/client/types";
 
 interface ViewerPanelProps {
@@ -52,6 +54,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
   const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const imageTools = useViewerImageTools(currentVideoId);
   const timeline = useFrameTimeline({
     videoId: currentVideoId,
     videoRef
@@ -144,6 +147,10 @@ export function ViewerPanel(props: ViewerPanelProps) {
     }))
     .filter((item) => item.width > 0 && item.height > 0);
 
+  const videoSurfaceWidth = imageTools.fitToWindow ? "100%" : `${imageTools.zoomPercent}%`;
+  const contrastPercent = Math.max(0, 100 + imageTools.contrast);
+  const brightnessPercent = Math.max(0, 100 + imageTools.brightness);
+
   return (
     <section
       style={{
@@ -171,90 +178,115 @@ export function ViewerPanel(props: ViewerPanelProps) {
 
       {currentVideoId ? (
         <>
-          <div style={{ position: "relative", background: "#09090b", borderRadius: 8, overflow: "hidden" }}>
-            <video
-              ref={videoRef}
-              src={`/api/videos/${currentVideoId}/stream`}
-              style={{ width: "100%", maxHeight: 460, display: "block" }}
-            />
-            {layerState.annotationVisible && layerState.categoryMasterVisible && videoWidth > 0 && videoHeight > 0 ? (
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                {currentFrameAnnotations.map((annotation) => (
-                  <div
-                    key={annotation.id}
-                    style={{
-                      position: "absolute",
-                      left: `${(annotation.x / videoWidth) * 100}%`,
-                      top: `${(annotation.y / videoHeight) * 100}%`,
-                      width: `${(annotation.width / videoWidth) * 100}%`,
-                      height: `${(annotation.height / videoHeight) * 100}%`,
-                      border: "2px solid #22d3ee",
-                      boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
-                    }}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {layerState.aiVisible && videoWidth > 0 && videoHeight > 0 ? (
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                {layerState.aiShowTrajectory ? (
-                  <svg
-                    width="100%"
-                    height="100%"
-                    viewBox={`0 0 ${videoWidth} ${videoHeight}`}
-                    preserveAspectRatio="none"
-                    style={{ position: "absolute", inset: 0 }}
-                  >
-                    {aiOverlay.trajectories.map((trajectory) => (
-                      <polyline
-                        key={`track-${trajectory.trackId}`}
-                        points={trajectory.points.map((point) => `${point.x},${point.y}`).join(" ")}
-                        fill="none"
-                        stroke="#f59e0b"
-                        strokeWidth={2}
-                        strokeOpacity={0.8}
-                      />
-                    ))}
-                  </svg>
-                ) : null}
+          <ViewerImageToolbar tools={imageTools} disabled={!currentVideoId} />
 
-                {layerState.aiShowBBox
-                  ? aiOverlay.detections.map((detection) => (
-                      <div
-                        key={`ai-${detection.id}`}
-                        style={{
-                          position: "absolute",
-                          left: `${(detection.x / videoWidth) * 100}%`,
-                          top: `${(detection.y / videoHeight) * 100}%`,
-                          width: `${(detection.width / videoWidth) * 100}%`,
-                          height: `${(detection.height / videoHeight) * 100}%`,
-                          border: "2px solid #f59e0b",
-                          boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
-                        }}
-                      >
-                        {layerState.aiShowTrackId && detection.trackId !== null ? (
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: -18,
-                              left: 0,
-                              padding: "1px 5px",
-                              borderRadius: 4,
-                              background: "rgba(245,158,11,0.95)",
-                              color: "#111827",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              whiteSpace: "nowrap"
-                            }}
-                          >
-                            #{detection.trackId} {Math.round(detection.score * 100)}%
-                          </div>
-                        ) : null}
-                      </div>
-                    ))
-                  : null}
-              </div>
-            ) : null}
+          <div style={{ position: "relative", background: "#09090b", borderRadius: 8, overflow: "auto", maxHeight: 460 }}>
+            <div style={{ position: "relative", width: videoSurfaceWidth, margin: "0 auto" }}>
+              <video
+                ref={videoRef}
+                src={`/api/videos/${currentVideoId}/stream`}
+                style={{
+                  width: "100%",
+                  display: "block",
+                  filter: `brightness(${brightnessPercent}%) contrast(${contrastPercent}%)`,
+                  cursor: imageTools.measureEnabled ? "crosshair" : "default"
+                }}
+              />
+
+              {imageTools.showGrid ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    backgroundImage:
+                      "linear-gradient(to right, rgba(255,255,255,0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.25) 1px, transparent 1px)",
+                    backgroundSize: "32px 32px"
+                  }}
+                />
+              ) : null}
+
+              {layerState.annotationVisible && layerState.categoryMasterVisible && videoWidth > 0 && videoHeight > 0 ? (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                  {currentFrameAnnotations.map((annotation) => (
+                    <div
+                      key={annotation.id}
+                      style={{
+                        position: "absolute",
+                        left: `${(annotation.x / videoWidth) * 100}%`,
+                        top: `${(annotation.y / videoHeight) * 100}%`,
+                        width: `${(annotation.width / videoWidth) * 100}%`,
+                        height: `${(annotation.height / videoHeight) * 100}%`,
+                        border: "2px solid #22d3ee",
+                        boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {layerState.aiVisible && videoWidth > 0 && videoHeight > 0 ? (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                  {layerState.aiShowTrajectory ? (
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox={`0 0 ${videoWidth} ${videoHeight}`}
+                      preserveAspectRatio="none"
+                      style={{ position: "absolute", inset: 0 }}
+                    >
+                      {aiOverlay.trajectories.map((trajectory) => (
+                        <polyline
+                          key={`track-${trajectory.trackId}`}
+                          points={trajectory.points.map((point) => `${point.x},${point.y}`).join(" ")}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth={2}
+                          strokeOpacity={0.8}
+                        />
+                      ))}
+                    </svg>
+                  ) : null}
+
+                  {layerState.aiShowBBox
+                    ? aiOverlay.detections.map((detection) => (
+                        <div
+                          key={`ai-${detection.id}`}
+                          style={{
+                            position: "absolute",
+                            left: `${(detection.x / videoWidth) * 100}%`,
+                            top: `${(detection.y / videoHeight) * 100}%`,
+                            width: `${(detection.width / videoWidth) * 100}%`,
+                            height: `${(detection.height / videoHeight) * 100}%`,
+                            border: "2px solid #f59e0b",
+                            boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
+                          }}
+                        >
+                          {layerState.aiShowTrackId && detection.trackId !== null ? (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: -18,
+                                left: 0,
+                                padding: "1px 5px",
+                                borderRadius: 4,
+                                background: "rgba(245,158,11,0.95)",
+                                color: "#111827",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              #{detection.trackId} {Math.round(detection.score * 100)}%
+                            </div>
+                          ) : null}
+                        </div>
+                      ))
+                    : null}
+                </div>
+              ) : null}
+            </div>
+
             <ViewerAiActionDock
               status={ai.status}
               progress={ai.progress}
@@ -318,6 +350,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
               <span>display_index：{timeline.currentFrame?.displayIndex ?? "-"}</span>
               <span>pts_us：{timeline.currentFrame?.ptsUs ?? "-"}</span>
               <span>對齊來源：{timeline.usesRequestVideoFrameCallback ? "mediaTime(rvfc)" : "currentTime(fallback)"}</span>
+              <span>影像：{imageTools.fitToWindow ? "fit" : `${imageTools.zoomPercent}%`}</span>
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
-import { queryRows } from "@/server/db";
+import { queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
 import { asErrorResponse } from "@/server/route-error";
@@ -9,38 +9,12 @@ import { parsePositiveInt } from "@/server/validators";
 
 export const runtime = "nodejs";
 
-interface ConsistencyRow {
-  video_id: string;
-  consistency_status: string;
-  consistency_reason: string | null;
-  last_checked_at: string;
-  check_source: string;
+interface CountRow {
+  total: number;
 }
 
 type RiskStatus = "OPEN" | "RESOLVED";
 type RiskSeverity = "P0" | "P1" | "P2";
-
-function mapSeverity(consistencyStatus: string): RiskSeverity {
-  if (
-    consistencyStatus === "MISSING_FILE" ||
-    consistencyStatus === "ORPHAN_DB" ||
-    consistencyStatus === "ORPHAN_FS"
-  ) {
-    return "P0";
-  }
-  if (
-    consistencyStatus === "MISSING_METADATA" ||
-    consistencyStatus === "MISSING_AI_RESULT" ||
-    consistencyStatus === "PROCESSING_LOCKED"
-  ) {
-    return "P1";
-  }
-  return "P2";
-}
-
-function mapStatus(consistencyStatus: string): RiskStatus {
-  return consistencyStatus === "HEALTHY" ? "RESOLVED" : "OPEN";
-}
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!isAuthorizedAdmin(req)) {
@@ -76,54 +50,60 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       throw new HttpError(400, "BAD_REQUEST", "severity must be P0, P1, or P2.");
     }
 
-    const rows = await queryRows<ConsistencyRow>(`
-SELECT
-  video_id,
-  consistency_status,
-  consistency_reason,
-  last_checked_at,
-  check_source
-FROM video_consistency
-ORDER BY last_checked_at DESC;
+    const where: string[] = [];
+    if (status) {
+      where.push(`status = ${sqlString(status)}`);
+    }
+    if (severity) {
+      where.push(`severity = ${sqlString(severity)}`);
+    }
+    if (riskCodeRaw) {
+      where.push(`risk_code = ${sqlString(riskCodeRaw)}`);
+    }
+
+    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+    const offset = (page - 1) * pageSize;
+
+    const [countRow] = await queryRows<CountRow>(`
+SELECT COUNT(*) AS total
+FROM risk_events
+${whereSql};
 `);
 
-    const mapped = rows.map((row) => {
-      const mappedStatus = mapStatus(row.consistency_status);
-      const mappedSeverity = mapSeverity(row.consistency_status);
-      return {
-        risk_code: row.consistency_status,
-        severity: mappedSeverity,
-        status: mappedStatus,
-        trigger_time: row.last_checked_at,
-        resolved_time: mappedStatus === "RESOLVED" ? row.last_checked_at : null,
-        trigger_source: row.check_source ?? null,
-        owner: null as string | null,
-        latest_note: row.consistency_reason,
-        video_id: row.video_id
-      };
-    });
-
-    const filtered = mapped.filter((item) => {
-      if (status && item.status !== status) {
-        return false;
-      }
-      if (severity && item.severity !== severity) {
-        return false;
-      }
-      if (riskCodeRaw && item.risk_code !== riskCodeRaw) {
-        return false;
-      }
-      return true;
-    });
-
-    const total = filtered.length;
-    const offset = (page - 1) * pageSize;
-    const items = filtered.slice(offset, offset + pageSize);
+    const items = await queryRows<{
+      risk_code: string;
+      severity: RiskSeverity;
+      status: RiskStatus;
+      trigger_time: string;
+      resolved_time: string | null;
+      trigger_source: string | null;
+      owner: string | null;
+      latest_note: string | null;
+      video_id: string | null;
+    }>(`
+SELECT
+  risk_code,
+  severity,
+  status,
+  trigger_time,
+  resolved_time,
+  trigger_source,
+  owner,
+  latest_note,
+  video_id
+FROM risk_events
+${whereSql}
+ORDER BY
+  CASE status WHEN 'OPEN' THEN 0 ELSE 1 END ASC,
+  trigger_time DESC
+LIMIT ${pageSize}
+OFFSET ${offset};
+`);
 
     return ok({
       page,
       pageSize,
-      total,
+      total: Number(countRow?.total ?? 0),
       items
     });
   } catch (err) {

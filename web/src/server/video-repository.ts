@@ -736,3 +736,13 @@ export async function resetAiToIdle(videoId: string): Promise<string> {
   ]);
   return now;
 }
+
+export async function listProcessingAiVideoIds(): Promise<string[]> {
+  const rows = await queryRows<IdRow>(`
+SELECT v.id
+FROM videos v
+LEFT JOIN ai_jobs aj ON aj.video_id = v.id
+WHERE COALESCE(aj.status, v.ai_status) = 'PROCESSING';
+`);
+  return rows.map((row) => row.id);
+}

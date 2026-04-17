@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { HttpError } from "@/server/errors";
 import { noContent } from "@/server/response";
+import { resolveRiskEvent } from "@/server/risk-events";
 import { asErrorResponse } from "@/server/route-error";
 import { removeVideoAssets } from "@/server/video-files";
 import { deleteVideoById, getVideoById } from "@/server/video-repository";
@@ -29,6 +30,12 @@ export async function DELETE(req: NextRequest, context: RouteContext): Promise<N
 
     await removeVideoAssets(id);
     await deleteVideoById(id);
+    await resolveRiskEvent({
+      riskCode: "FS_DB_INCONSISTENCY",
+      triggerSource: "VIDEO_DELETE",
+      latestNote: "VIDEO_DELETED",
+      videoId: id
+    });
 
     return noContent();
   } catch (err) {

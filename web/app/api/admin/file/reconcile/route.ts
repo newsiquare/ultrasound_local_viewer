@@ -6,6 +6,7 @@ import { getAdminCredentialFromEnv, isAuthorizedAdmin, unauthorizedBasic } from 
 import { executeMany, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
+import { openRiskEvent, resolveRiskEvent } from "@/server/risk-events";
 import { asErrorResponse } from "@/server/route-error";
 import { aiResultPath, metadataPath, removeVideoAssets, videoDir } from "@/server/video-files";
 import { deleteVideoById, getAiJobByVideoId, getVideoById, resetAiToIdle } from "@/server/video-repository";
@@ -31,6 +32,20 @@ interface ReconcileResultItem {
     reason: string;
   }>;
   problems: string[];
+}
+
+function riskSeverityFromProblemCodes(problemCodes: string[]): "P0" | "P1" | "P2" {
+  if (problemCodes.some((code) => code === "MISSING_FILE" || code === "ORPHAN_DB" || code === "ORPHAN_FS")) {
+    return "P0";
+  }
+  if (
+    problemCodes.some(
+      (code) => code === "MISSING_METADATA" || code === "MISSING_AI_RESULT" || code === "PROCESSING_LOCKED"
+    )
+  ) {
+    return "P1";
+  }
+  return "P2";
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -199,6 +214,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (mode === "apply") {
+      for (const item of results) {
+        const hasFsProblem = item.problems.some((code) =>
+          [
+            "MISSING_FILE",
+            "MISSING_METADATA",
+            "MISSING_AI_RESULT",
+            "ORPHAN_DB",
+            "ORPHAN_FS",
+            "PROCESSING_LOCKED"
+          ].includes(code)
+        );
+
+        if (hasFsProblem && !item.changed) {
+          await openRiskEvent({
+            riskCode: "FS_DB_INCONSISTENCY",
+            severity: riskSeverityFromProblemCodes(item.problems),
+            triggerSource: "RECONCILE_APPLY",
+            latestNote: item.problems.join(","),
+            videoId: item.videoId
+          });
+        } else if (item.changed) {
+          await resolveRiskEvent({
+            riskCode: "FS_DB_INCONSISTENCY",
+            triggerSource: "RECONCILE_APPLY",
+            latestNote: "RECONCILE_APPLIED",
+            videoId: item.videoId
+          });
+        }
+      }
+
       const now = new Date().toISOString();
       const actor = getAdminCredentialFromEnv().user;
       const payloadJson = JSON.stringify({

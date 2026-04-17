@@ -6,6 +6,7 @@ import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { executeMany, sqlBoolean, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
+import { openRiskEvent, resolveRiskEvent } from "@/server/risk-events";
 import { asErrorResponse } from "@/server/route-error";
 import { aiResultPath, metadataPath } from "@/server/video-files";
 import { getAiJobByVideoId, getVideoById } from "@/server/video-repository";
@@ -51,6 +52,16 @@ function dedupeActions(actions: SuggestedAction[]): SuggestedAction[] {
     seen.add(key);
     return true;
   });
+}
+
+function toRiskSeverity(problems: ConsistencyProblem[]): Severity {
+  if (problems.some((problem) => problem.severity === "P0")) {
+    return "P0";
+  }
+  if (problems.some((problem) => problem.severity === "P1")) {
+    return "P1";
+  }
+  return "P2";
 }
 
 export async function GET(req: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -185,6 +196,23 @@ export async function GET(req: NextRequest, context: RouteContext): Promise<Next
         locked_by_processing=excluded.locked_by_processing,
         updated_at=excluded.updated_at;`
     ]);
+
+    if (problems.length === 0) {
+      await resolveRiskEvent({
+        riskCode: "FS_DB_INCONSISTENCY",
+        triggerSource: "CONSISTENCY_SCAN",
+        latestNote: "HEALTHY",
+        videoId
+      });
+    } else {
+      await openRiskEvent({
+        riskCode: "FS_DB_INCONSISTENCY",
+        severity: toRiskSeverity(problems),
+        triggerSource: "CONSISTENCY_SCAN",
+        latestNote: reason,
+        videoId
+      });
+    }
 
     return ok({
       videoId,

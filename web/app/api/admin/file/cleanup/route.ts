@@ -1,9 +1,13 @@
+import { statfs } from "node:fs/promises";
+
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminCredentialFromEnv, isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { executeMany, queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
+import { getStoragePaths } from "@/server/paths";
 import { ok } from "@/server/response";
+import { openRiskEvent, resolveRiskEvent } from "@/server/risk-events";
 import { asErrorResponse } from "@/server/route-error";
 import { removeVideoAssets } from "@/server/video-files";
 import { deleteVideoById } from "@/server/video-repository";
@@ -189,6 +193,21 @@ function analyzeCandidates(rows: VideoRow[], retentionDays: number, keepLatestPe
   });
 }
 
+async function getStorageUsagePercent(): Promise<number | null> {
+  try {
+    const stats = await statfs(getStoragePaths().storageRoot);
+    const blocks = Number(stats.blocks ?? 0);
+    const free = Number(stats.bfree ?? stats.bavail ?? 0);
+    if (!Number.isFinite(blocks) || blocks <= 0) {
+      return null;
+    }
+    const used = Math.max(0, blocks - free);
+    return (used / blocks) * 100;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!isAuthorizedAdmin(req)) {
     return unauthorizedBasic();
@@ -215,7 +234,21 @@ ${whereSql}
 ORDER BY v.filename ASC, v.uploaded_at DESC;
 `);
 
-    const candidates = analyzeCandidates(rows, payload.retentionDays, payload.keepLatestPerFilename);
+    const storageUsagePercent = await getStorageUsagePercent();
+    const highWatermarkExceeded =
+      storageUsagePercent === null || storageUsagePercent >= payload.highWatermarkPercent;
+    const isScopedCleanup = Boolean(payload.filename || (payload.videoIds && payload.videoIds.length > 0));
+
+    const candidates = analyzeCandidates(rows, payload.retentionDays, payload.keepLatestPerFilename).map((item) => {
+      if (isScopedCleanup || highWatermarkExceeded || !item.candidate) {
+        return item;
+      }
+      return {
+        ...item,
+        candidate: false,
+        reasons: [...item.reasons, "BELOW_HIGH_WATERMARK"]
+      };
+    });
     const candidateIds = candidates
       .filter((item) => item.candidate)
       .map((item) => item.videoId)
@@ -241,6 +274,7 @@ ORDER BY v.filename ASC, v.uploaded_at DESC;
 
     let deleted = 0;
     let reclaimedBytes = 0;
+    const eligibleCount = candidates.filter((item) => item.candidate).length;
 
     if (payload.mode === "apply") {
       for (const candidate of candidates) {
@@ -255,6 +289,12 @@ ORDER BY v.filename ASC, v.uploaded_at DESC;
 
         await removeVideoAssets(candidate.videoId);
         await deleteVideoById(candidate.videoId);
+        await resolveRiskEvent({
+          riskCode: "FS_DB_INCONSISTENCY",
+          triggerSource: "CLEANUP_APPLY",
+          latestNote: "VIDEO_REMOVED_BY_CLEANUP",
+          videoId: candidate.videoId
+        });
         deleted += 1;
         reclaimedBytes += Number(candidate.fileSizeBytes ?? 0);
       }
@@ -297,6 +337,24 @@ ORDER BY v.filename ASC, v.uploaded_at DESC;
         .reduce((sum, item) => sum + Number(item.fileSizeBytes ?? 0), 0);
     }
 
+    if (!isScopedCleanup) {
+      const remainingEligible = payload.mode === "apply" ? 0 : eligibleCount;
+      if (highWatermarkExceeded && remainingEligible > 0) {
+        await openRiskEvent({
+          riskCode: "STORAGE_GROWTH",
+          severity: "P2",
+          triggerSource: "CLEANUP_MONITOR",
+          latestNote: `usage=${storageUsagePercent?.toFixed(2) ?? "unknown"}%,eligible=${remainingEligible},checked=${candidates.length}`
+        });
+      } else {
+        await resolveRiskEvent({
+          riskCode: "STORAGE_GROWTH",
+          triggerSource: "CLEANUP_MONITOR",
+          latestNote: `usage=${storageUsagePercent?.toFixed(2) ?? "unknown"}%,eligible=${remainingEligible}`
+        });
+      }
+    }
+
     return ok({
       mode: payload.mode,
       policy: {
@@ -307,9 +365,11 @@ ORDER BY v.filename ASC, v.uploaded_at DESC;
       },
       summary: {
         checked: candidates.length,
-        eligible: candidates.filter((item) => item.candidate).length,
+        eligible: eligibleCount,
         deleted,
-        estimatedReclaimedBytes: reclaimedBytes
+        estimatedReclaimedBytes: reclaimedBytes,
+        storageUsagePercent,
+        highWatermarkExceeded
       },
       confirmationToken: payload.mode === "dry-run" ? confirmationToken : null,
       candidates

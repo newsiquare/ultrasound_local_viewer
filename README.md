@@ -39,6 +39,20 @@ conda activate us-worker
 pip install -r ai-worker/requirements.txt
 ```
 
+啟動 ai-worker：
+
+```bash
+uvicorn app.main:app --app-dir ai-worker --host 127.0.0.1 --port 8001
+```
+
+可選環境變數（web 端）：
+
+- `AI_WORKER_URL`（預設 `http://127.0.0.1:8001`）
+- `AI_WORKER_MODEL`（預設 `yolov8n.pt`）
+- `AI_WORKER_FRAME_STRIDE`（預設 `1`，逐幀推論）
+- `AI_WORKER_CONF_THRESHOLD`（預設 `0.25`）
+- `AI_WORKER_IOU_THRESHOLD`（預設 `0.45`）
+
 ## Admin 存取（`/file`）
 
 - `/file` 與 `/api/admin/file/*` 為 admin-only。

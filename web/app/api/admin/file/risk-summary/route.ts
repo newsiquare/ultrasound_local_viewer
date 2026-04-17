@@ -7,27 +7,11 @@ import { asErrorResponse } from "@/server/route-error";
 
 export const runtime = "nodejs";
 
-interface ConsistencyRow {
-  consistency_status: string;
-  last_checked_at: string;
-}
-
-function mapSeverity(consistencyStatus: string): "P0" | "P1" | "P2" {
-  if (
-    consistencyStatus === "MISSING_FILE" ||
-    consistencyStatus === "ORPHAN_DB" ||
-    consistencyStatus === "ORPHAN_FS"
-  ) {
-    return "P0";
-  }
-  if (
-    consistencyStatus === "MISSING_METADATA" ||
-    consistencyStatus === "MISSING_AI_RESULT" ||
-    consistencyStatus === "PROCESSING_LOCKED"
-  ) {
-    return "P1";
-  }
-  return "P2";
+interface RiskRow {
+  severity: "P0" | "P1" | "P2";
+  status: "OPEN" | "RESOLVED";
+  trigger_time: string;
+  resolved_time: string | null;
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -36,9 +20,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const rows = await queryRows<ConsistencyRow>(`
-SELECT consistency_status, last_checked_at
-FROM video_consistency;
+    const rows = await queryRows<RiskRow>(`
+SELECT severity, status, trigger_time, resolved_time
+FROM risk_events;
 `);
 
     const now = Date.now();
@@ -51,13 +35,8 @@ FROM video_consistency;
     let resolved24h = 0;
 
     for (const row of rows) {
-      const status = row.consistency_status;
-      const isOpen = status !== "HEALTHY";
-      const severity = mapSeverity(status);
-      const checkedMs = Date.parse(row.last_checked_at);
-      const recent = Number.isFinite(checkedMs) ? checkedMs >= threshold : false;
-
-      if (isOpen) {
+      const severity = row.severity;
+      if (row.status === "OPEN") {
         if (severity === "P0") {
           openP0 += 1;
         } else if (severity === "P1") {
@@ -65,10 +44,15 @@ FROM video_consistency;
         } else {
           openP2 += 1;
         }
-        if (recent) {
-          new24h += 1;
-        }
-      } else if (recent) {
+      }
+
+      const triggerMs = Date.parse(row.trigger_time);
+      if (Number.isFinite(triggerMs) && triggerMs >= threshold) {
+        new24h += 1;
+      }
+
+      const resolvedMs = row.resolved_time ? Date.parse(row.resolved_time) : NaN;
+      if (Number.isFinite(resolvedMs) && resolvedMs >= threshold) {
         resolved24h += 1;
       }
     }
