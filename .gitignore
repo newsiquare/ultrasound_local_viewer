@@ -2,6 +2,7 @@
 node_modules/
 .next/
 dist/
+*.tsbuildinfo
 
 # Python
 .venv/
@@ -20,7 +21,10 @@ storage/videos/*
 !storage/videos/.gitkeep
 storage/*.db
 storage/*.sqlite
+storage/*.db-shm
+storage/*.db-wal
+storage/*.sqlite-shm
+storage/*.sqlite-wal
 
 # Logs
 *.log
-
