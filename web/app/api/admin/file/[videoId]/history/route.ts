@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
-import { queryRows } from "@/server/db";
+import { queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
 import { asErrorResponse } from "@/server/route-error";
@@ -22,6 +22,28 @@ interface RouteContext {
   params: Promise<{ videoId: string }>;
 }
 
+type AuditEventType = "RECONCILE_APPLY" | "CLEANUP_APPLY" | "RISK_EVENT_MANUAL";
+
+const ALLOWED_EVENT_TYPES: AuditEventType[] = [
+  "RECONCILE_APPLY",
+  "CLEANUP_APPLY",
+  "RISK_EVENT_MANUAL"
+];
+
+function parseEventType(value: string | null): AuditEventType | null {
+  if (!value || value === "ALL") {
+    return null;
+  }
+  if (ALLOWED_EVENT_TYPES.includes(value as AuditEventType)) {
+    return value as AuditEventType;
+  }
+  throw new HttpError(
+    400,
+    "BAD_REQUEST",
+    "eventType must be ALL, RECONCILE_APPLY, CLEANUP_APPLY, or RISK_EVENT_MANUAL."
+  );
+}
+
 function parseMaybeJson(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
@@ -31,52 +53,54 @@ function parseMaybeJson(text: string): unknown {
 }
 
 function includesVideoId(parsed: unknown, videoId: string): boolean {
-  if (!parsed || typeof parsed !== "object") {
+  const visited = new Set<unknown>();
+
+  function visit(value: unknown, parentKey?: string): boolean {
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    if (
+      typeof value === "string" &&
+      (parentKey === "videoId" ||
+        parentKey === "video_id")
+    ) {
+      return value === videoId;
+    }
+
+    if (
+      Array.isArray(value) &&
+      (parentKey === "videoIds" || parentKey === "candidateIds")
+    ) {
+      return value.some((entry) => String(entry) === videoId);
+    }
+
+    if (typeof value !== "object") {
+      return false;
+    }
+    if (visited.has(value)) {
+      return false;
+    }
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      return value.some((entry) => visit(entry, parentKey));
+    }
+
+    const obj = value as Record<string, unknown>;
+    if (obj.videoId === videoId || obj.video_id === videoId) {
+      return true;
+    }
+
+    for (const [key, nested] of Object.entries(obj)) {
+      if (visit(nested, key)) {
+        return true;
+      }
+    }
     return false;
   }
 
-  const obj = parsed as Record<string, unknown>;
-  if (obj.videoId === videoId || obj.video_id === videoId) {
-    return true;
-  }
-
-  const videoIds = obj.videoIds;
-  if (Array.isArray(videoIds) && videoIds.some((value) => String(value) === videoId)) {
-    return true;
-  }
-
-  const candidateIds = obj.candidateIds;
-  if (Array.isArray(candidateIds) && candidateIds.some((value) => String(value) === videoId)) {
-    return true;
-  }
-
-  const items = obj.items;
-  if (Array.isArray(items)) {
-    for (const item of items) {
-      if (!item || typeof item !== "object") {
-        continue;
-      }
-      const parsedItem = item as Record<string, unknown>;
-      if (parsedItem.videoId === videoId || parsedItem.video_id === videoId) {
-        return true;
-      }
-    }
-  }
-
-  const candidates = obj.candidates;
-  if (Array.isArray(candidates)) {
-    for (const candidate of candidates) {
-      if (!candidate || typeof candidate !== "object") {
-        continue;
-      }
-      const parsedCandidate = candidate as Record<string, unknown>;
-      if (parsedCandidate.videoId === videoId || parsedCandidate.video_id === videoId) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return visit(parsed);
 }
 
 export async function GET(req: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -94,7 +118,11 @@ export async function GET(req: NextRequest, context: RouteContext): Promise<Next
     const { searchParams } = new URL(req.url);
     const page = parsePositiveInt(searchParams.get("page"), 1, Number.MAX_SAFE_INTEGER);
     const pageSize = parsePositiveInt(searchParams.get("pageSize"), 20, 200);
+    const eventType = parseEventType(searchParams.get("eventType"));
     const offset = (page - 1) * pageSize;
+    const whereSql = eventType
+      ? `WHERE event_type IN ('RECONCILE_APPLY', 'CLEANUP_APPLY', 'RISK_EVENT_MANUAL') AND event_type = ${sqlString(eventType)}`
+      : "WHERE event_type IN ('RECONCILE_APPLY', 'CLEANUP_APPLY', 'RISK_EVENT_MANUAL')";
 
     const rows = await queryRows<AuditRow>(`
 SELECT
@@ -105,7 +133,7 @@ SELECT
   result_json,
   created_at
 FROM audit_log
-WHERE event_type IN ('RECONCILE_APPLY', 'CLEANUP_APPLY')
+${whereSql}
 ORDER BY created_at DESC;
 `);
 

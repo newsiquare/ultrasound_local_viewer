@@ -17,6 +17,7 @@ interface CountRow {
 
 type RiskStatus = "OPEN" | "RESOLVED";
 type RiskSeverity = "P0" | "P1" | "P2";
+type RiskSinceHours = 24 | 168;
 
 interface RiskEventRow {
   risk_code: string;
@@ -121,6 +122,21 @@ function parsePatchOptionalText(
   };
 }
 
+function parseSinceHours(raw: string | null): RiskSinceHours | null {
+  if (!raw || raw === "ALL") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new HttpError(400, "BAD_REQUEST", "sinceHours must be a positive integer.");
+  }
+  if (parsed !== 24 && parsed !== 168) {
+    throw new HttpError(400, "BAD_REQUEST", "sinceHours must be 24 or 168.");
+  }
+  return parsed;
+}
+
 function scopeKeyOf(videoId: string | null): string {
   return videoId ?? "__GLOBAL__";
 }
@@ -188,6 +204,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const statusRaw = searchParams.get("status");
     const severityRaw = searchParams.get("severity");
     const riskCodeRaw = searchParams.get("riskCode")?.trim() ?? "";
+    const sinceHours = parseSinceHours(searchParams.get("sinceHours"));
 
     const status: RiskStatus | null =
       !statusRaw || statusRaw === "ALL"
@@ -218,6 +235,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
     if (riskCodeRaw) {
       where.push(`risk_code = ${sqlString(riskCodeRaw)}`);
+    }
+    if (sinceHours) {
+      const thresholdIso = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+      where.push(
+        `(CASE WHEN status='RESOLVED' AND resolved_time IS NOT NULL THEN resolved_time ELSE trigger_time END) >= ${sqlString(
+          thresholdIso
+        )}`
+      );
     }
 
     const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";

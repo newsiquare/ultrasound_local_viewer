@@ -339,9 +339,11 @@ export interface AdminFileRiskEventMutationData {
   item: AdminFileRiskEventItem;
 }
 
+export type AdminFileAuditEventType = "RECONCILE_APPLY" | "CLEANUP_APPLY" | "RISK_EVENT_MANUAL";
+
 export interface AdminFileAuditHistoryItem {
   id: string;
-  event_type: "RECONCILE_APPLY" | "CLEANUP_APPLY" | string;
+  event_type: AdminFileAuditEventType | string;
   actor: string;
   payload: unknown;
   result: unknown;

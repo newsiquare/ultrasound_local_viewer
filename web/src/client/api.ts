@@ -1,5 +1,6 @@
 import {
   AdminFileCleanupData,
+  AdminFileAuditEventType,
   AdminFileAuditHistoryData,
   AdminFileConsistencyData,
   AdminFileListData,
@@ -154,6 +155,7 @@ export async function fetchAdminRiskEvents(options?: {
   status?: "OPEN" | "RESOLVED";
   severity?: "P0" | "P1" | "P2";
   riskCode?: string;
+  sinceHours?: 24 | 168;
   page?: number;
   pageSize?: number;
 }): Promise<AdminFileRiskEventsData> {
@@ -166,6 +168,9 @@ export async function fetchAdminRiskEvents(options?: {
   }
   if (options?.riskCode) {
     query.set("riskCode", options.riskCode);
+  }
+  if (options?.sinceHours) {
+    query.set("sinceHours", String(options.sinceHours));
   }
   query.set("page", String(options?.page ?? 1));
   query.set("pageSize", String(options?.pageSize ?? 20));
@@ -216,10 +221,16 @@ export async function updateAdminRiskEvent(payload: {
 export async function fetchAdminCleanupHistory(options?: {
   page?: number;
   pageSize?: number;
+  eventType?: AdminFileAuditEventType | "ALL";
 }): Promise<AdminFileAuditHistoryData> {
-  const page = options?.page ?? 1;
-  const pageSize = options?.pageSize ?? 20;
-  const response = await fetch(`/api/admin/file/cleanup-history?page=${page}&pageSize=${pageSize}`, {
+  const query = new URLSearchParams();
+  query.set("page", String(options?.page ?? 1));
+  query.set("pageSize", String(options?.pageSize ?? 20));
+  if (options?.eventType && options.eventType !== "ALL") {
+    query.set("eventType", options.eventType);
+  }
+
+  const response = await fetch(`/api/admin/file/cleanup-history?${query.toString()}`, {
     method: "GET",
     cache: "no-store"
   });
@@ -231,11 +242,17 @@ export async function fetchAdminVideoHistory(
   options?: {
     page?: number;
     pageSize?: number;
+    eventType?: AdminFileAuditEventType | "ALL";
   }
 ): Promise<AdminFileAuditHistoryData> {
-  const page = options?.page ?? 1;
-  const pageSize = options?.pageSize ?? 20;
-  const response = await fetch(`/api/admin/file/${videoId}/history?page=${page}&pageSize=${pageSize}`, {
+  const query = new URLSearchParams();
+  query.set("page", String(options?.page ?? 1));
+  query.set("pageSize", String(options?.pageSize ?? 20));
+  if (options?.eventType && options.eventType !== "ALL") {
+    query.set("eventType", options.eventType);
+  }
+
+  const response = await fetch(`/api/admin/file/${videoId}/history?${query.toString()}`, {
     method: "GET",
     cache: "no-store"
   });

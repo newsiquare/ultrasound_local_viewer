@@ -19,74 +19,81 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 4,
+        justifyContent: "center",
         padding: "4px 8px",
         background: "#0f1018",
         borderBottom: "1px solid #252638",
         flexShrink: 0,
-        flexWrap: "wrap"
       }}
     >
-      {/* Zoom controls */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+
+      {/* Group 1: Zoom controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <ToolBtn onClick={tools.zoomOut} disabled={disabled || tools.fitToWindow} title="縮小">
-          <Minus size={13} />
+        <ToolBtn onClick={tools.zoomOut} disabled={disabled || tools.fitToWindow} title="縮小" bright>
+          <Minus size={15} />
         </ToolBtn>
         <div
           style={{
             minWidth: 52,
             textAlign: "center",
-            fontSize: 11,
-            color: "#c9ccd8",
+            fontSize: 12,
+            color: "#e2e3f0",
             padding: "0 4px",
             fontVariantNumeric: "tabular-nums"
           }}
         >
           {tools.fitToWindow ? "Fit" : `${tools.zoomPercent}%`}
         </div>
-        <ToolBtn onClick={tools.zoomIn} disabled={disabled || tools.fitToWindow} title="放大">
-          <Plus size={13} />
+        <ToolBtn onClick={tools.zoomIn} disabled={disabled || tools.fitToWindow} title="放大" bright>
+          <Plus size={15} />
         </ToolBtn>
       </div>
 
       <Divider />
 
-      <ToolBtn
-        onClick={() => tools.setFitToWindow(!tools.fitToWindow)}
-        disabled={disabled}
-        active={tools.fitToWindow}
-        title="自適應視窗"
-      >
-        <Maximize2 size={13} />
-      </ToolBtn>
+      {/* Group 2: Fit + Reset */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <ToolBtn
+          onClick={() => tools.setFitToWindow(!tools.fitToWindow)}
+          disabled={disabled}
+          active={tools.fitToWindow}
+          title="自適應視窗"
+        >
+          <Maximize2 size={15} />
+        </ToolBtn>
 
-      <ToolBtn onClick={tools.resetView} disabled={disabled} title="重設視圖">
-        <Rotate3D size={13} />
-      </ToolBtn>
-
-      <Divider />
-
-      <ToolBtn
-        onClick={() => tools.setShowGrid(!tools.showGrid)}
-        disabled={disabled}
-        active={tools.showGrid}
-        title="格線"
-      >
-        <Grid3x3 size={13} />
-      </ToolBtn>
-
-      <ToolBtn
-        onClick={() => tools.setMeasureEnabled(!tools.measureEnabled)}
-        disabled={disabled}
-        active={tools.measureEnabled}
-        title="量測"
-      >
-        <Ruler size={13} />
-      </ToolBtn>
+        <ToolBtn onClick={tools.resetView} disabled={disabled} title="重設視圖">
+          <Rotate3D size={15} />
+        </ToolBtn>
+      </div>
 
       <Divider />
 
-      {/* Contrast/Brightness popover */}
+      {/* Group 3: Grid + Ruler */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <ToolBtn
+          onClick={() => tools.setShowGrid(!tools.showGrid)}
+          disabled={disabled}
+          active={tools.showGrid}
+          title="格線"
+        >
+          <Grid3x3 size={15} />
+        </ToolBtn>
+
+        <ToolBtn
+          onClick={() => tools.setMeasureEnabled(!tools.measureEnabled)}
+          disabled={disabled}
+          active={tools.measureEnabled}
+          title="量測"
+        >
+          <Ruler size={15} />
+        </ToolBtn>
+      </div>
+
+      <Divider />
+
+      {/* Group 4: Contrast/Brightness popover */}
       <div style={{ position: "relative" }}>
         <ToolBtn
           onClick={() => setShowAdjust(!showAdjust)}
@@ -94,7 +101,7 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
           active={showAdjust || tools.contrast !== 0 || tools.brightness !== 0}
           title="亮度/對比"
         >
-          <SlidersHorizontal size={13} />
+          <SlidersHorizontal size={15} />
         </ToolBtn>
 
         {showAdjust && (
@@ -169,6 +176,8 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
           </>
         )}
       </div>
+
+      </div>
     </div>
   );
 }
@@ -177,10 +186,11 @@ function ToolBtn(props: {
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  bright?: boolean;
   title?: string;
   children: React.ReactNode;
 }) {
-  const { onClick, disabled = false, active = false, title, children } = props;
+  const { onClick, disabled = false, active = false, bright = false, title, children } = props;
 
   return (
     <button
@@ -192,12 +202,12 @@ function ToolBtn(props: {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 28,
-        height: 28,
-        borderRadius: 5,
+        width: 32,
+        height: 32,
+        borderRadius: 6,
         border: active ? "1px solid rgba(79,140,255,0.4)" : "1px solid transparent",
         background: active ? "rgba(79,140,255,0.15)" : "transparent",
-        color: active ? "#4f8cff" : disabled ? "#52547a" : "#c9ccd8",
+        color: active ? "#4f8cff" : disabled ? "#52547a" : bright ? "#7880a0" : "#c9ccd8",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
         transition: "background 0.1s, color 0.1s",
@@ -210,5 +220,5 @@ function ToolBtn(props: {
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 18, background: "#252638", flexShrink: 0, margin: "0 2px" }} />;
+  return <div style={{ width: 1, height: 20, background: "#3c3e58", flexShrink: 0, margin: "0 4px" }} />;
 }

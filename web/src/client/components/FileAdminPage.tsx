@@ -50,8 +50,17 @@ const SORT_BY_OPTIONS = [
   { value: "annotation_count", label: "annotation_count" },
   { value: "ai_annotation_count", label: "ai_annotation_count" }
 ] as const;
+const AUDIT_EVENT_TYPE_OPTIONS = [
+  "ALL",
+  "RECONCILE_APPLY",
+  "CLEANUP_APPLY",
+  "RISK_EVENT_MANUAL"
+] as const;
+const RISK_TIME_RANGE_OPTIONS = ["ALL", "24H", "7D"] as const;
 
 type SortByValue = (typeof SORT_BY_OPTIONS)[number]["value"];
+type AuditEventTypeFilter = (typeof AUDIT_EVENT_TYPE_OPTIONS)[number];
+type RiskTimeRangeFilter = (typeof RISK_TIME_RANGE_OPTIONS)[number];
 type ColumnKey =
   | "video_id"
   | "filename"
@@ -89,7 +98,19 @@ interface FileAdminPreferences {
   columnVisibility?: Partial<Record<ColumnKey, boolean>>;
   showRiskEvents?: boolean;
   riskStatusFilter?: "OPEN" | "RESOLVED";
+  riskTimeRangeFilter?: RiskTimeRangeFilter;
   showAuditHistory?: boolean;
+  auditEventTypeFilter?: AuditEventTypeFilter;
+}
+
+function sinceHoursOfRiskTimeRange(range: RiskTimeRangeFilter): 24 | 168 | undefined {
+  if (range === "24H") {
+    return 24;
+  }
+  if (range === "7D") {
+    return 168;
+  }
+  return undefined;
 }
 
 function formatTime(value: string | null): string {
@@ -185,6 +206,7 @@ export function FileAdminPage() {
   const [riskMutationMessage, setRiskMutationMessage] = useState<string | null>(null);
   const [showRiskEvents, setShowRiskEvents] = useState(false);
   const [riskStatusFilter, setRiskStatusFilter] = useState<"OPEN" | "RESOLVED">("OPEN");
+  const [riskTimeRangeFilter, setRiskTimeRangeFilter] = useState<RiskTimeRangeFilter>("ALL");
   const [manualRiskCode, setManualRiskCode] = useState("");
   const [manualRiskSeverity, setManualRiskSeverity] = useState<"P0" | "P1" | "P2">("P2");
   const [manualRiskStatus, setManualRiskStatus] = useState<"OPEN" | "RESOLVED">("OPEN");
@@ -195,6 +217,7 @@ export function FileAdminPage() {
   const [auditHistoryLoading, setAuditHistoryLoading] = useState(false);
   const [auditHistoryError, setAuditHistoryError] = useState<string | null>(null);
   const [showAuditHistory, setShowAuditHistory] = useState(false);
+  const [auditEventTypeFilter, setAuditEventTypeFilter] = useState<AuditEventTypeFilter>("ALL");
   const [selectedVideoDetail, setSelectedVideoDetail] = useState<AdminFileListItem | null>(null);
   const [videoHistory, setVideoHistory] = useState<AdminFileAuditHistoryData | null>(null);
   const [videoHistoryLoading, setVideoHistoryLoading] = useState(false);
@@ -264,6 +287,7 @@ export function FileAdminPage() {
       try {
         const result = await fetchAdminRiskEvents({
           status,
+          sinceHours: sinceHoursOfRiskTimeRange(riskTimeRangeFilter),
           page: 1,
           pageSize: 20
         });
@@ -276,13 +300,17 @@ export function FileAdminPage() {
         setRiskEventsLoading(false);
       }
     },
-    []
+    [riskTimeRangeFilter]
   );
 
   const loadAuditHistory = useCallback(async () => {
     setAuditHistoryLoading(true);
     try {
-      const result = await fetchAdminCleanupHistory({ page: 1, pageSize: 20 });
+      const result = await fetchAdminCleanupHistory({
+        page: 1,
+        pageSize: 20,
+        eventType: auditEventTypeFilter
+      });
       setAuditHistory(result);
       setAuditHistoryError(null);
     } catch (historyError) {
@@ -291,12 +319,16 @@ export function FileAdminPage() {
     } finally {
       setAuditHistoryLoading(false);
     }
-  }, []);
+  }, [auditEventTypeFilter]);
 
   const loadVideoHistory = useCallback(async (videoId: string) => {
     setVideoHistoryLoading(true);
     try {
-      const result = await fetchAdminVideoHistory(videoId, { page: 1, pageSize: 20 });
+      const result = await fetchAdminVideoHistory(videoId, {
+        page: 1,
+        pageSize: 20,
+        eventType: auditEventTypeFilter
+      });
       setVideoHistory(result);
       setVideoHistoryError(null);
     } catch (historyError) {
@@ -305,7 +337,7 @@ export function FileAdminPage() {
     } finally {
       setVideoHistoryLoading(false);
     }
-  }, []);
+  }, [auditEventTypeFilter]);
 
   useEffect(() => {
     const stored = parseStoredPreferences();
@@ -354,8 +386,17 @@ export function FileAdminPage() {
       if (stored.riskStatusFilter === "OPEN" || stored.riskStatusFilter === "RESOLVED") {
         setRiskStatusFilter(stored.riskStatusFilter);
       }
+      if (stored.riskTimeRangeFilter && RISK_TIME_RANGE_OPTIONS.includes(stored.riskTimeRangeFilter)) {
+        setRiskTimeRangeFilter(stored.riskTimeRangeFilter);
+      }
       if (typeof stored.showAuditHistory === "boolean") {
         setShowAuditHistory(stored.showAuditHistory);
+      }
+      if (
+        stored.auditEventTypeFilter &&
+        AUDIT_EVENT_TYPE_OPTIONS.includes(stored.auditEventTypeFilter)
+      ) {
+        setAuditEventTypeFilter(stored.auditEventTypeFilter);
       }
       if (stored.columnVisibility && typeof stored.columnVisibility === "object") {
         setColumnVisibility((current) => ({
@@ -386,7 +427,9 @@ export function FileAdminPage() {
       columnVisibility,
       showRiskEvents,
       riskStatusFilter,
-      showAuditHistory
+      riskTimeRangeFilter,
+      showAuditHistory,
+      auditEventTypeFilter
     };
     window.localStorage.setItem(FILE_ADMIN_PREFS_KEY, JSON.stringify(payload));
   }, [
@@ -401,7 +444,9 @@ export function FileAdminPage() {
     pageSize,
     q,
     qInput,
+    auditEventTypeFilter,
     riskStatusFilter,
+    riskTimeRangeFilter,
     showAuditHistory,
     showRiskEvents,
     sortBy,
@@ -450,6 +495,13 @@ export function FileAdminPage() {
     }
     void loadAuditHistory();
   }, [loadAuditHistory, showAuditHistory]);
+
+  useEffect(() => {
+    if (!selectedVideoDetail) {
+      return;
+    }
+    void loadVideoHistory(selectedVideoDetail.video_id);
+  }, [auditEventTypeFilter, loadVideoHistory, selectedVideoDetail]);
 
   useEffect(() => {
     if (!selectedVideoDetail || !data?.items) {
@@ -1142,6 +1194,20 @@ export function FileAdminPage() {
                 <option value="RESOLVED">RESOLVED</option>
               </select>
             </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              時間
+              <select
+                value={riskTimeRangeFilter}
+                onChange={(event) => setRiskTimeRangeFilter(event.target.value as RiskTimeRangeFilter)}
+                style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              >
+                {RISK_TIME_RANGE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => {
@@ -1294,8 +1360,22 @@ export function FileAdminPage() {
         }}
       >
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <strong>操作歷史（reconcile / cleanup）</strong>
-          <div style={{ display: "flex", gap: 8 }}>
+          <strong>操作歷史（reconcile / cleanup / risk）</strong>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              事件
+              <select
+                value={auditEventTypeFilter}
+                onChange={(event) => setAuditEventTypeFilter(event.target.value as AuditEventTypeFilter)}
+                style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              >
+                {AUDIT_EVENT_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => {
@@ -1333,7 +1413,7 @@ export function FileAdminPage() {
             )}
           </section>
         ) : (
-          <div style={{ color: "#9699b0" }}>可檢視最近 20 筆 reconcile/cleanup 套用紀錄。</div>
+          <div style={{ color: "#9699b0" }}>可檢視最近 20 筆 reconcile/cleanup/risk 操作紀錄。</div>
         )}
       </section>
 
@@ -1548,7 +1628,21 @@ export function FileAdminPage() {
         >
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <strong>Details Drawer</strong>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                事件
+                <select
+                  value={auditEventTypeFilter}
+                  onChange={(event) => setAuditEventTypeFilter(event.target.value as AuditEventTypeFilter)}
+                  style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #d1d5db" }}
+                >
+                  {AUDIT_EVENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button type="button" onClick={() => void loadVideoHistory(selectedVideoDetail.video_id)}>
                 刷新歷史
               </button>

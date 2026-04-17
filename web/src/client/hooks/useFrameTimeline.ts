@@ -96,6 +96,7 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
   const isSeekingRef = useRef(false);
   const isScrubbingRef = useRef(false);
   const wasPlayingBeforeScrubRef = useRef(false);
+  const pendingSeekIndexRef = useRef(-1);
 
   const syncFrameFromMediaTime = useCallback((mediaTimeSec: number, applyMonotonicGuard: boolean) => {
     const safeTimeSec = Number.isFinite(mediaTimeSec) && mediaTimeSec >= 0 ? mediaTimeSec : 0;
@@ -209,6 +210,20 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
     const onSeeked = () => {
       isSeekingRef.current = false;
       lastFrameIndexRef.current = -1;
+
+      const pendingIndex = pendingSeekIndexRef.current;
+      if (pendingIndex >= 0) {
+        pendingSeekIndexRef.current = -1;
+        const frame = framesRef.current[pendingIndex];
+        if (frame) {
+          lastFrameIndexRef.current = pendingIndex;
+          setCurrentFrameIndex(pendingIndex);
+          setCurrentFrame(frame);
+          setCurrentTimeSec(frame.ptsUs / 1_000_000);
+          return;
+        }
+      }
+
       syncFrameFromMediaTime(video.currentTime || 0, false);
     };
 
@@ -305,6 +320,7 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
       const safeIndex = clamp(index, 0, framesRef.current.length - 1);
       const frame = framesRef.current[safeIndex];
       const targetTime = frame.ptsUs / 1_000_000;
+      pendingSeekIndexRef.current = safeIndex;
       video.pause();
       video.currentTime = targetTime;
       setCurrentTimeSec(targetTime);
