@@ -109,6 +109,7 @@ export function LayersPanel(props: LayersPanelProps) {
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#22C55E");
+  const [showAddCategoryForm, setShowAddCategoryForm] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [infoOpenId, setInfoOpenId] = useState<string | null>(null);
@@ -159,6 +160,15 @@ export function LayersPanel(props: LayersPanelProps) {
     return categories.reduce((sum, c) => sum + (c.is_visible !== 0 ? 1 : 0), 0);
   }, [categories, layerState.categoryMasterVisible]);
 
+  // Per-frame annotation count per category (from current frame items)
+  const frameCountByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of frameAnnotations.items) {
+      map.set(item.categoryId, (map.get(item.categoryId) ?? 0) + 1);
+    }
+    return map;
+  }, [frameAnnotations.items]);
+
   const handleToggleCategoryVisible = useCallback(async (category: CategoryItem, nextVisible: boolean) => {
     if (!videoId) return;
     setBusyKey(`cat-visible-${category.id}`);
@@ -170,12 +180,26 @@ export function LayersPanel(props: LayersPanelProps) {
     } finally { setBusyKey(null); }
   }, [loadCategories, onReload, videoId]);
 
+  const handleUpdateCategoryStroke = useCallback(async (
+    category: CategoryItem,
+    patch: { strokeWidth?: number; strokeColor?: string | null }
+  ) => {
+    if (!videoId) return;
+    try {
+      await updateCategory(videoId, category.id, patch);
+      await Promise.all([loadCategories(), onReload()]);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "更新類別樣式失敗");
+    }
+  }, [loadCategories, onReload, videoId]);
+
   const handleCreateCategory = useCallback(async () => {
     if (!videoId) return;
     setBusyKey("create-category");
     try {
       await createCategory(videoId, { name: newCategoryName, color: newCategoryColor });
       setNewCategoryName("");
+      setShowAddCategoryForm(false);
       await Promise.all([loadCategories(), onReload()]);
       setNotice("類別已新增");
     } catch (error) {
@@ -315,33 +339,66 @@ export function LayersPanel(props: LayersPanelProps) {
             <span style={{ fontSize: 10, color: "#7880a0" }}>
               {visibleCategoryCount}/{categories.length}
             </span>
-          </div>
-
-          {/* New category form */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 4, marginBottom: 8 }}>
-            <input
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="新類別名稱"
-              disabled={!videoId}
-              onKeyDown={(e) => { if (e.key === "Enter" && newCategoryName) void handleCreateCategory(); }}
-            />
-            <input
-              type="color"
-              value={newCategoryColor}
-              onChange={(e) => setNewCategoryColor(e.target.value)}
-              disabled={!videoId}
-            />
             <button
               type="button"
-              onClick={() => void handleCreateCategory()}
-              disabled={!videoId || !newCategoryName || busyKey === "create-category"}
-              style={actionBtnStyle("primary", !videoId || !newCategoryName || busyKey === "create-category")}
-              title="新增類別"
+              onClick={() => { setShowAddCategoryForm((v) => !v); if (showAddCategoryForm) setNewCategoryName(""); }}
+              disabled={!videoId}
+              style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 20, height: 20, borderRadius: 4, border: "none", cursor: videoId ? "pointer" : "not-allowed",
+                background: showAddCategoryForm ? "rgba(79,140,255,0.18)" : "transparent",
+                color: showAddCategoryForm ? "#4f8cff" : "#7880a0",
+                transition: "background 0.12s, color 0.12s", flexShrink: 0,
+                opacity: videoId ? 1 : 0.4,
+              }}
+              title={showAddCategoryForm ? "取消新增" : "新增類別"}
             >
               <Plus size={13} />
             </button>
           </div>
+
+          {/* New category form — shown when + is clicked */}
+          {showAddCategoryForm && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
+              <input
+                autoFocus
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="新類別名稱"
+                disabled={!videoId}
+                style={{ flex: 1, minWidth: 0 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newCategoryName) { void handleCreateCategory(); }
+                  if (e.key === "Escape") { setShowAddCategoryForm(false); setNewCategoryName(""); }
+                }}
+              />
+              <input
+                type="color"
+                value={newCategoryColor}
+                onChange={(e) => setNewCategoryColor(e.target.value)}
+                disabled={!videoId}
+                style={{ width: 22, height: 22, padding: 0, border: "none", borderRadius: 4, cursor: "pointer", background: "transparent", flexShrink: 0 }}
+                title="選擇顏色"
+              />
+              <button
+                type="button"
+                onClick={() => void handleCreateCategory()}
+                disabled={!videoId || !newCategoryName || busyKey === "create-category"}
+                style={actionBtnStyle("primary", !videoId || !newCategoryName || busyKey === "create-category")}
+                title="確認新增"
+              >
+                <Check size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddCategoryForm(false); setNewCategoryName(""); }}
+                style={actionBtnStyle("ghost", false)}
+                title="取消"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
 
           {/* Category list */}
           {categories.length === 0 && (
@@ -351,45 +408,113 @@ export function LayersPanel(props: LayersPanelProps) {
             const rowVisible = layerState.categoryMasterVisible && category.is_visible !== 0;
             const rowBusy = busyKey === `cat-visible-${category.id}` || busyKey === `delete-category-${category.id}`;
             const isSelected = category.id === selectedAnnotationCategoryId;
+            const frameCount = frameCountByCategory.get(category.id) ?? 0;
+            const totalCount = category.annotation_count;
+            const effectiveStrokeColor = category.stroke_color ?? category.color;
             return (
               <div
                 key={category.id}
+                onClick={() => onAnnotationCategorySelect?.(category.id)}
                 style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "4px 4px", borderRadius: 5, marginBottom: 2,
-                  background: isSelected ? "rgba(79,140,255,0.06)" : "transparent",
-                  border: isSelected ? "1px solid rgba(79,140,255,0.25)" : "1px solid transparent"
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "3px 4px", borderRadius: 6, marginBottom: 4,
+                  background: isSelected ? `${category.color}1a` : "#171824",
+                  border: isSelected
+                    ? `1.5px solid ${category.color}`
+                    : "1px solid #3c3e58",
+                  cursor: "pointer",
+                  transition: "background 0.1s, border-color 0.1s",
                 }}
+                onMouseEnter={(e) => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)"; } }}
+                onMouseLeave={(e) => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.background = "#171824"; } }}
               >
-                <button
-                  type="button"
-                  onClick={() => onAnnotationCategorySelect?.(category.id)}
-                  style={{
-                    width: 10, height: 10, borderRadius: 2, background: category.color,
-                    flexShrink: 0, border: isSelected ? "1px solid #4f8cff" : "1px solid transparent",
-                    cursor: "pointer", padding: 0
+                {/* Category name */}
+                <span style={{
+                  flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#7880a0",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  userSelect: "none", minWidth: 0,
+                }}>
+                  {category.name}
+                </span>
+
+                {/* Frame count / total count */}
+                <span style={{
+                  fontSize: 10, color: "#585a78", flexShrink: 0,
+                  fontVariantNumeric: "tabular-nums", letterSpacing: 0,
+                  whiteSpace: "nowrap",
+                }} title="當前影格 / 全影片標註數量">
+                  <span style={{ color: frameCount > 0 ? "#9699b0" : "#585a78" }}>{frameCount}</span>
+                  <span style={{ color: "#3d3f56" }}>/</span>
+                  <span style={{ color: "#585a78" }}>{totalCount}</span>
+                </span>
+
+                {/* Stroke width: line preview + spinner */}
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg width={18} height={14} style={{ flexShrink: 0 }}>
+                    <line
+                      x1={2} y1={7} x2={16} y2={7}
+                      stroke={effectiveStrokeColor}
+                      strokeWidth={Math.min(category.stroke_width, 8)}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={20}
+                    step={0.5}
+                    value={category.stroke_width}
+                    title="線框粗細"
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (isFinite(v) && v >= 0.5 && v <= 20) {
+                        void handleUpdateCategoryStroke(category, { strokeWidth: v });
+                      }
+                    }}
+                    style={{
+                      width: 34, fontSize: 11, textAlign: "center",
+                      background: "rgba(255,255,255,0.05)", border: "1px solid #252638",
+                      borderRadius: 4, color: "#9699b0", padding: "1px 2px",
+                      flexShrink: 0, outline: "none",
+                    }}
+                  />
+                </div>
+
+                {/* Stroke color picker */}
+                <input
+                  type="color"
+                  value={effectiveStrokeColor}
+                  title="線框顏色"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    void handleUpdateCategoryStroke(category, { strokeColor: e.target.value });
                   }}
-                  title={`設為標註類別：${category.name}`}
+                  style={{
+                    width: 20, height: 20, padding: 0, border: "none",
+                    borderRadius: 3, cursor: "pointer", background: "transparent",
+                    flexShrink: 0,
+                  }}
                 />
+
+                {/* Eye toggle */}
                 <button
                   type="button"
-                  onClick={() => { void handleToggleCategoryVisible(category, !rowVisible); }}
+                  onClick={(e) => { e.stopPropagation(); void handleToggleCategoryVisible(category, !rowVisible); }}
                   disabled={!layerState.categoryMasterVisible || rowBusy}
                   style={iconBtnStyle(rowVisible)}
                   title={rowVisible ? "隱藏" : "顯示"}
                 >
                   {rowVisible ? <Eye size={11} /> : <EyeOff size={11} />}
                 </button>
-                <span style={{ flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#7880a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}
-                  onClick={() => onAnnotationCategorySelect?.(category.id)}
-                >
-                  {category.name}
-                </span>
-                <span style={{ fontSize: 10, color: "#585a78", flexShrink: 0 }}>#{category.annotation_count}</span>
+
+                {/* Delete */}
                 {category.source !== "AI" && (
                   <button
                     type="button"
-                    onClick={() => void handleDeleteCategory(category)}
+                    onClick={(e) => { e.stopPropagation(); void handleDeleteCategory(category); }}
                     disabled={rowBusy}
                     style={iconBtnStyle(false, "danger")}
                     title="刪除類別"

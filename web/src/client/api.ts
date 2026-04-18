@@ -432,6 +432,8 @@ export async function updateCategory(
     name?: string;
     color?: string;
     isVisible?: boolean;
+    strokeWidth?: number;
+    strokeColor?: string | null;
   }
 ): Promise<CategoryItem> {
   const response = await fetch(`/api/videos/${videoId}/categories/${categoryId}`, {

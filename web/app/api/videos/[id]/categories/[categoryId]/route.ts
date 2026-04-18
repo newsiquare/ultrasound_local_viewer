@@ -39,6 +39,8 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Ne
       name?: string;
       color?: string;
       isVisible?: boolean;
+      strokeWidth?: number;
+      strokeColor?: string | null;
     } = {};
 
     if (body.name !== undefined) {
@@ -62,6 +64,18 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Ne
         throw new HttpError(400, "BAD_REQUEST", "isVisible must be a boolean.");
       }
       patch.isVisible = body.isVisible;
+    }
+
+    if (body.strokeWidth !== undefined) {
+      const sw = Number(body.strokeWidth);
+      if (!isFinite(sw) || sw < 0.5 || sw > 20) {
+        throw new HttpError(400, "BAD_REQUEST", "strokeWidth must be a number between 0.5 and 20.");
+      }
+      patch.strokeWidth = sw;
+    }
+
+    if (body.strokeColor !== undefined) {
+      patch.strokeColor = body.strokeColor === null ? null : normalizeHexColor(body.strokeColor);
     }
 
     const updated = await updateCategory(videoId, categoryId, patch);

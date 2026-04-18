@@ -49,6 +49,8 @@ export interface CategoryRow {
   source: string;
   is_visible: number;
   annotation_count: number;
+  stroke_width: number;
+  stroke_color: string | null;
 }
 
 export interface AnnotationRow {
@@ -250,7 +252,9 @@ SELECT
   c.color,
   c.source,
   c.is_visible,
-  COALESCE(a.cnt, 0) AS annotation_count
+  COALESCE(a.cnt, 0) AS annotation_count,
+  c.stroke_width,
+  c.stroke_color
 FROM categories c
 LEFT JOIN (
   SELECT category_id, COUNT(*) AS cnt
@@ -272,7 +276,9 @@ SELECT
   c.color,
   c.source,
   c.is_visible,
-  COALESCE(a.cnt, 0) AS annotation_count
+  COALESCE(a.cnt, 0) AS annotation_count,
+  c.stroke_width,
+  c.stroke_color
 FROM categories c
 LEFT JOIN (
   SELECT category_id, COUNT(*) AS cnt
@@ -347,6 +353,8 @@ export async function updateCategory(
     name?: string;
     color?: string;
     isVisible?: boolean;
+    strokeWidth?: number;
+    strokeColor?: string | null;
   }
 ): Promise<CategoryRow | null> {
   assertUuidV7(videoId);
@@ -360,6 +368,12 @@ export async function updateCategory(
   }
   if (patch.isVisible !== undefined) {
     sets.push(`is_visible = ${sqlBoolean(patch.isVisible)}`);
+  }
+  if (patch.strokeWidth !== undefined) {
+    sets.push(`stroke_width = ${patch.strokeWidth}`);
+  }
+  if (patch.strokeColor !== undefined) {
+    sets.push(`stroke_color = ${patch.strokeColor === null ? "NULL" : sqlString(patch.strokeColor)}`);
   }
 
   if (sets.length === 0) {

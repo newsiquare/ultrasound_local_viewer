@@ -27,6 +27,14 @@ function getCategoryColor(categories: CategoryItem[], categoryId: string): strin
   return categories.find((c) => c.id === categoryId)?.color ?? "#22d3ee";
 }
 
+function getCategoryStroke(categories: CategoryItem[], categoryId: string): { color: string; width: number } {
+  const cat = categories.find((c) => c.id === categoryId);
+  return {
+    color: cat?.stroke_color ?? cat?.color ?? "#22d3ee",
+    width: cat?.stroke_width ?? 2,
+  };
+}
+
 // ──────────────────────────────────────
 // Drag types
 // ──────────────────────────────────────
@@ -114,7 +122,8 @@ function bboxHandlePoints(g: BboxGeometry): { id: BboxHandle; cx: number; cy: nu
 function renderGeometry(
   geometry: AnnotationGeometry | null,
   color: string,
-  opacity: number = 1
+  opacity: number = 1,
+  strokeWidth: number = 2
 ): React.ReactNode {
   if (!geometry) return null;
 
@@ -127,7 +136,7 @@ function renderGeometry(
         height={geometry.height}
         fill="none"
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={strokeWidth}
         strokeOpacity={opacity}
         style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.6))" }}
       />
@@ -141,7 +150,7 @@ function renderGeometry(
         points={pts}
         fill={`${color}22`}
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={strokeWidth}
         strokeOpacity={opacity}
         style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.6))" }}
       />
@@ -481,6 +490,7 @@ export function AnnotationCanvas({
         annotations
           .filter((a) => a.isVisible)
           .map((annotation) => {
+            const categoryStroke = getCategoryStroke(categories, annotation.categoryId);
             const color = getCategoryColor(categories, annotation.categoryId);
             const isSelected = annotation.id === selectedAnnotationId;
             const displayGeo = isSelected && liveGeometry ? liveGeometry : annotation.geometry;
@@ -488,7 +498,7 @@ export function AnnotationCanvas({
             return (
               <g key={annotation.id}>
                 {/* Base shape */}
-                {renderGeometry(displayGeo, color, isSelected ? 1 : 0.85)}
+                {renderGeometry(displayGeo, categoryStroke.color, isSelected ? 1 : 0.85, categoryStroke.width)}
 
                 {/* Text label */}
                 {displayGeo?.type === "text" && annotation.textContent && (
