@@ -10,6 +10,8 @@ interface UseFrameAnnotationsOptions {
   frameId: string | null;
   enabled: boolean;
   fallbackItems?: AnnotationItem[];
+  /** Increment to force a cache bust + re-fetch for the current frame */
+  refreshKey?: number;
 }
 
 interface UseFrameAnnotationsResult {
@@ -21,7 +23,7 @@ interface UseFrameAnnotationsResult {
 const REQUEST_THROTTLE_MS = 120;
 
 export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFrameAnnotationsResult {
-  const { videoId, frameId, enabled, fallbackItems } = options;
+  const { videoId, frameId, enabled, fallbackItems, refreshKey } = options;
 
   const [items, setItems] = useState<AnnotationItem[]>(fallbackItems ?? []);
   const [loading, setLoading] = useState(false);
@@ -181,6 +183,15 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
 
     scheduleFetch(frameId);
   }, [enabled, fallbackItems, frameId, scheduleFetch, videoId]);
+
+  // When refreshKey increments, bust cache for the current key and re-fetch
+  useEffect(() => {
+    if (refreshKey === undefined || !videoId || !frameId || !enabled) return;
+    const cacheKey = `${videoId}:${frameId}`;
+    cacheRef.current.delete(cacheKey);
+    void runFetch(frameId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   useEffect(() => {
     return () => {

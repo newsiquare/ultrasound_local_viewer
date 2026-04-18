@@ -493,12 +493,9 @@ export async function createAnnotation(
   payload: {
     frameId: string;
     categoryId: string;
-    bbox: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    };
+    annotationType: "BBOX" | "POLYGON" | "TEXT";
+    geometry: Record<string, unknown>;
+    textContent?: string | null;
   }
 ): Promise<AnnotationItem> {
   const response = await fetch(`/api/videos/${videoId}/annotations`, {
@@ -516,12 +513,7 @@ export async function updateAnnotation(
   annotationId: string,
   payload: {
     categoryId?: string;
-    bbox?: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    };
+    isVisible?: boolean;
   }
 ): Promise<AnnotationItem> {
   const response = await fetch(`/api/videos/${videoId}/annotations/${annotationId}`, {

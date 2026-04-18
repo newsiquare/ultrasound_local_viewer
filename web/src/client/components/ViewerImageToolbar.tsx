@@ -1,17 +1,20 @@
 "use client";
 
-import { Grid3x3, Maximize2, Minus, Plus, Rotate3D, Ruler, SlidersHorizontal } from "lucide-react";
+import { Grid3x3, Maximize2, Minus, MousePointer2, Pentagon, Plus, Rotate3D, Ruler, SlidersHorizontal, Square, Type } from "lucide-react";
 import { useState } from "react";
 
+import { AnnotationToolType } from "@/client/hooks/useAnnotationTool";
 import { UseViewerImageToolsResult } from "@/client/hooks/useViewerImageTools";
 
 interface ViewerImageToolbarProps {
   tools: UseViewerImageToolsResult;
   disabled?: boolean;
+  activeTool?: AnnotationToolType | null;
+  onToolChange?: (tool: AnnotationToolType | null) => void;
 }
 
 export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
-  const { tools, disabled = false } = props;
+  const { tools, disabled = false, activeTool = null, onToolChange } = props;
   const [showAdjust, setShowAdjust] = useState(false);
 
   return (
@@ -175,6 +178,44 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
             </div>
           </>
         )}
+      </div>
+
+      <Divider />
+
+      {/* Group 5: Annotation tools */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <ToolBtn
+          onClick={() => onToolChange?.(activeTool === "SELECT" ? null : "SELECT")}
+          disabled={disabled}
+          active={activeTool === "SELECT"}
+          title="選取 (S)"
+        >
+          <MousePointer2 size={15} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => onToolChange?.(activeTool === "RECT" ? null : "RECT")}
+          disabled={disabled}
+          active={activeTool === "RECT"}
+          title="矩形標註 (R)"
+        >
+          <Square size={15} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => onToolChange?.(activeTool === "POLYGON" ? null : "POLYGON")}
+          disabled={disabled}
+          active={activeTool === "POLYGON"}
+          title="多邊形標註 (P)，雙擊完成"
+        >
+          <Pentagon size={15} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => onToolChange?.(activeTool === "TEXT" ? null : "TEXT")}
+          disabled={disabled}
+          active={activeTool === "TEXT"}
+          title="文字標籤 (T)"
+        >
+          <Type size={15} />
+        </ToolBtn>
       </div>
 
       </div>

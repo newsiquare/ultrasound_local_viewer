@@ -55,6 +55,10 @@ export interface AnnotationRow {
   id: string;
   frame_id: string;
   category_id: string;
+  annotation_type: string;
+  geometry_json: string | null;
+  text_content: string | null;
+  is_visible: number;
   bbox_json: string;
   created_at: string;
   updated_at: string;
@@ -395,7 +399,7 @@ export async function getAnnotationsByVideoAndFrameIds(
   const inExpr = frameIds.map((frameId) => sqlString(frameId)).join(",");
 
   return queryRows<AnnotationRow>(`
-SELECT id, frame_id, category_id, bbox_json, created_at, updated_at
+SELECT id, frame_id, category_id, annotation_type, geometry_json, text_content, is_visible, bbox_json, created_at, updated_at
 FROM annotations
 WHERE video_id = ${sqlString(videoId)}
   AND frame_id IN (${inExpr})
@@ -432,7 +436,7 @@ WHERE ${whereExpr};
   const total = Number(countRows[0]?.total ?? 0);
 
   const items = await queryRows<AnnotationRow>(`
-SELECT a.id, a.frame_id, a.category_id, a.bbox_json, a.created_at, a.updated_at
+SELECT a.id, a.frame_id, a.category_id, a.annotation_type, a.geometry_json, a.text_content, a.is_visible, a.bbox_json, a.created_at, a.updated_at
 FROM annotations a
 LEFT JOIN categories c ON c.id = a.category_id
 WHERE ${whereExpr}
@@ -448,7 +452,7 @@ OFFSET ${options.cursor};
 export async function getAnnotationById(videoId: string, annotationId: string): Promise<AnnotationRow | null> {
   assertUuidV7(videoId);
   const rows = await queryRows<AnnotationRow>(`
-SELECT id, frame_id, category_id, bbox_json, created_at, updated_at
+SELECT id, frame_id, category_id, annotation_type, geometry_json, text_content, is_visible, bbox_json, created_at, updated_at
 FROM annotations
 WHERE video_id = ${sqlString(videoId)}
   AND id = ${sqlString(annotationId)}
@@ -461,6 +465,9 @@ export async function createManualAnnotation(input: {
   videoId: string;
   frameId: string;
   categoryId: string;
+  annotationType: string;
+  geometryJson: string;
+  textContent: string | null;
   bboxJson: string;
 }): Promise<AnnotationRow> {
   assertUuidV7(input.videoId);
@@ -473,6 +480,10 @@ export async function createManualAnnotation(input: {
       video_id,
       frame_id,
       category_id,
+      annotation_type,
+      geometry_json,
+      text_content,
+      is_visible,
       bbox_json,
       created_at,
       updated_at
@@ -481,6 +492,10 @@ export async function createManualAnnotation(input: {
       ${sqlString(input.videoId)},
       ${sqlString(input.frameId)},
       ${sqlString(input.categoryId)},
+      ${sqlString(input.annotationType)},
+      ${sqlString(input.geometryJson)},
+      ${sqlNullableString(input.textContent)},
+      1,
       ${sqlString(input.bboxJson)},
       ${sqlString(now)},
       ${sqlString(now)}
@@ -499,7 +514,7 @@ export async function updateAnnotation(
   annotationId: string,
   patch: {
     categoryId?: string;
-    bboxJson?: string;
+    isVisible?: boolean;
   }
 ): Promise<AnnotationRow | null> {
   assertUuidV7(videoId);
@@ -507,8 +522,8 @@ export async function updateAnnotation(
   if (patch.categoryId !== undefined) {
     sets.push(`category_id = ${sqlString(patch.categoryId)}`);
   }
-  if (patch.bboxJson !== undefined) {
-    sets.push(`bbox_json = ${sqlString(patch.bboxJson)}`);
+  if (patch.isVisible !== undefined) {
+    sets.push(`is_visible = ${sqlBoolean(patch.isVisible)}`);
   }
   if (sets.length === 0) {
     return getAnnotationById(videoId, annotationId);

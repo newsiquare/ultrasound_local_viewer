@@ -7,6 +7,91 @@ export interface ManualBbox {
   height: number;
 }
 
+export type AnnotationType = "BBOX" | "POLYGON" | "TEXT";
+
+export interface BboxGeometry {
+  type: "bbox";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PolygonGeometry {
+  type: "polygon";
+  points: Array<{ x: number; y: number }>;
+}
+
+export interface TextGeometry {
+  type: "text";
+  x: number;
+  y: number;
+}
+
+export type AnnotationGeometry = BboxGeometry | PolygonGeometry | TextGeometry;
+
+const VALID_ANNOTATION_TYPES = new Set<string>(["BBOX", "POLYGON", "TEXT"]);
+
+export function normalizeAnnotationType(input: unknown): AnnotationType {
+  if (typeof input !== "string" || !VALID_ANNOTATION_TYPES.has(input)) {
+    throw new HttpError(400, "BAD_REQUEST", "annotationType must be BBOX, POLYGON, or TEXT.");
+  }
+  return input as AnnotationType;
+}
+
+export function normalizeTextContent(input: unknown, annotationType: AnnotationType): string | null {
+  if (annotationType === "TEXT") {
+    if (typeof input !== "string" || input.trim().length === 0) {
+      throw new HttpError(400, "BAD_REQUEST", "textContent is required for TEXT annotations.");
+    }
+    if (input.length > 500) {
+      throw new HttpError(400, "BAD_REQUEST", "textContent must be 500 characters or fewer.");
+    }
+    return input.trim();
+  }
+  return null;
+}
+
+export function normalizeGeometry(input: unknown, annotationType: AnnotationType): AnnotationGeometry {
+  if (!input || typeof input !== "object") {
+    throw new HttpError(400, "BAD_REQUEST", "geometry must be an object.");
+  }
+  const obj = input as Record<string, unknown>;
+
+  if (annotationType === "BBOX") {
+    const x = asFiniteNumber(obj.x, "geometry.x");
+    const y = asFiniteNumber(obj.y, "geometry.y");
+    const width = asFiniteNumber(obj.width, "geometry.width");
+    const height = asFiniteNumber(obj.height, "geometry.height");
+    if (width <= 0 || height <= 0) {
+      throw new HttpError(400, "BAD_REQUEST", "geometry.width and geometry.height must be > 0.");
+    }
+    return { type: "bbox", x, y, width, height };
+  }
+
+  if (annotationType === "POLYGON") {
+    if (!Array.isArray(obj.points) || obj.points.length < 3) {
+      throw new HttpError(400, "BAD_REQUEST", "geometry.points must be an array with at least 3 points.");
+    }
+    const points = obj.points.map((pt: unknown, idx: number) => {
+      if (!pt || typeof pt !== "object") {
+        throw new HttpError(400, "BAD_REQUEST", `geometry.points[${idx}] must be an object.`);
+      }
+      const p = pt as Record<string, unknown>;
+      return {
+        x: asFiniteNumber(p.x, `geometry.points[${idx}].x`),
+        y: asFiniteNumber(p.y, `geometry.points[${idx}].y`)
+      };
+    });
+    return { type: "polygon", points };
+  }
+
+  // TEXT
+  const x = asFiniteNumber(obj.x, "geometry.x");
+  const y = asFiniteNumber(obj.y, "geometry.y");
+  return { type: "text", x, y };
+}
+
 export function normalizeCategoryName(input: unknown): string {
   if (typeof input !== "string") {
     throw new HttpError(400, "BAD_REQUEST", "Category name must be a string.");

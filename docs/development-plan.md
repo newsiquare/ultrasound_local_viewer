@@ -19,6 +19,7 @@
 - [10. 測試清單（可執行）](#10-測試清單可執行)
 - [11. AI Worker 執行架構（新增）](#11-ai-worker-執行架構新增)
 - [12. 風險與對策](#12-風險與對策)
+- [13. 實作追蹤 Checklist（完成/未完成）](#13-實作追蹤-checklist完成未完成)
 
 ---
 
@@ -218,6 +219,46 @@
 2. `seeked` 後重新計算當前 `frame_id`，再恢復 overlay
 3. 逐幀跳轉必須以 `timeline` 為準，不用 `1/fps` 推估
 
+#### 3.2.5 標註工具列（Annotation Toolbar）
+
+標註工具列位於影像工具列同一列，以分隔線區隔「視圖工具區 | 標註工具區」：
+
+| 工具 | 說明 | 游標樣式 |
+|---|---|---|
+| Select（游標） | 選取或移動已存在的標註 | default |
+| Text（文字） | 點擊放置文字標籤 | text |
+| Rectangle（矩形） | 點擊拖曳繪製矩形 BBox | crosshair |
+| Polygon（多邊形） | 逐點點擊後閉合多邊形 | crosshair |
+
+**模式切換規則：**
+
+1. 點擊任一標註工具（Text / Rectangle / Polygon）即進入標註模式，無需另外切換開關。
+2. 點擊 Select 工具或按 `Esc` 退出標註模式，回到瀏覽模式。
+3. 進入標註模式時，影片**自動暫停**。
+4. **前置條件**：必須先在類別圖層選取一個目標類別才可繪製；未選取時提示「請先選擇類別」，不進入繪製。
+5. 若有未完成的 Polygon 草稿，切換工具或 seek 時彈出放棄確認提示。
+6. 切換影片時強制退出標註模式並丟棄草稿。
+
+**各工具操作細節：**
+
+Rectangle：
+1. 按住左鍵拖曳，放開即確認；繪製中顯示虛線預覽框。
+2. 最小尺寸 `10×10 px`（影片座標系），低於此值放棄並提示。
+
+Polygon：
+1. 左鍵逐點新增頂點，右鍵撤銷最後一個點。
+2. 點擊第一個頂點（或按 Enter）閉合多邊形並確認。
+3. Esc 放棄當前草稿；最少需 3 個頂點才可閉合，最多 64 個頂點。
+
+Text：
+1. 左鍵點擊放置位置，彈出 inline 輸入框（非模態框）。
+2. Enter 確認，Esc 放棄；文字長度限制 `1~64` 字元。
+
+**座標系統：**
+
+1. 所有幾何座標使用**影片原始解析度座標**（非畫面 CSS 像素）。
+2. 顯示時依當前縮放比例換算，避免跨解析度渲染錯位。
+
 ---
 
 ### 3.3 Layers Panel
@@ -267,13 +308,34 @@
 ##### 區塊功能
 
 1. 區塊開關（顯示/隱藏所有人工標註）
-2. 目前幀標註清單
-3. 選中標註高亮與定位
+2. 目前幀標註清單（依 `frame_id` 篩選，自動隨幀切換）
+3. 清單列支援：類別快速變更、單筆可見切換、單筆刪除
+
+##### 清單列欄位（由左至右）
+
+| 位置 | 內容 | 說明 |
+|---|---|---|
+| 1 | 類型圖標 | `[T]` 文字、`[▭]` 矩形、`[⬡]` 多邊形 |
+| 2 | 類別名稱（下拉選單） | 可直接更改該標註所屬類別（僅列出 `source=MANUAL` 類別） |
+| 3 | Info 圖標 | 滑鼠靠近自動展開浮層，顯示幾何詳情與幀資訊 |
+| 4 | Eye 圖標 | 切換單筆標註可見性（不影響其他筆） |
+| 5 | 刪除圖標 | 刪除該筆標註 |
+
+##### Info 圖標浮層內容
+
+1. 幀資訊：`display_index`（第幾幀）、`frame_id`
+2. 幾何資訊：
+   - Rectangle：`x, y, width, height`（影片座標）
+   - Polygon：頂點數、頂點座標列表
+   - Text：`x, y`（放置點）、文字內容
+3. 建立時間：`created_at`
 
 ##### 顯示規則
 
-1. 區塊關閉時，不渲染人工標註 overlay
-2. 區塊開啟時，只渲染當前幀且對應可見類別的標註
+1. 區塊關閉時，不渲染任何人工標註 overlay。
+2. 區塊開啟時，只渲染**當前幀**（`frame_id` 符合）且 eye 開啟且對應類別 `isVisible=true` 的標註。
+3. 切換幀時，清單**自動替換**為當前幀的標註（無動畫，直接刷新）。
+4. 點擊清單列可在影片區高亮對應標註。
 
 #### 3.3.3 AI 圖層（AI Layers）
 
@@ -475,11 +537,29 @@ ID 規格（固定）：
 2. `video_id TEXT NOT NULL`
 3. `frame_id TEXT NOT NULL`
 4. `category_id TEXT NOT NULL`
-5. `bbox_json TEXT NOT NULL`
-6. `created_at TEXT NOT NULL`
-7. `updated_at TEXT NOT NULL`
-8. `FOREIGN KEY(video_id) REFERENCES videos(id) ON DELETE CASCADE`
-9. `FOREIGN KEY(category_id) REFERENCES categories(id)`
+5. `annotation_type TEXT NOT NULL`（`BBOX` / `POLYGON` / `TEXT`）
+6. `geometry_json TEXT NOT NULL`（統一幾何格式，取代舊有 `bbox_json`）
+7. `text_content TEXT`（僅 `annotation_type=TEXT` 時使用）
+8. `is_visible INTEGER NOT NULL DEFAULT 1`
+9. `created_at TEXT NOT NULL`
+10. `updated_at TEXT NOT NULL`
+11. `FOREIGN KEY(video_id) REFERENCES videos(id) ON DELETE CASCADE`
+12. `FOREIGN KEY(category_id) REFERENCES categories(id)`
+
+`geometry_json` 格式規範：
+
+```json
+// BBOX
+{ "type": "bbox", "x": 120, "y": 80, "width": 200, "height": 150 }
+
+// POLYGON
+{ "type": "polygon", "points": [[x1,y1],[x2,y2],[x3,y3]] }
+
+// TEXT
+{ "type": "text", "x": 300, "y": 200 }
+```
+
+座標系統：影片原始解析度座標（非 CSS 像素），顯示時依縮放比換算。
 
 #### `video_consistency`
 
@@ -913,19 +993,44 @@ Query：`status`, `severity`, `riskCode`, `page`, `pageSize`
 
 #### `GET /api/videos/:id/annotations`
 
-Query：`frameId`, `source`, `cursor`, `limit`
+Query：`frameId`（必填）、`source`、`cursor`、`limit`
+
+回傳指定 `frameId` 的標註清單；不支援不帶 `frameId` 的跨幀批次拉取。
 
 #### `POST /api/videos/:id/annotations`
 
 用途：建立人工標註（`source=MANUAL`）
 
+Input：
+
+```json
+{
+  "frameId": "f_000001",
+  "categoryId": "uuid-xxx",
+  "annotationType": "BBOX",
+  "geometry": { "type": "bbox", "x": 120, "y": 80, "width": 200, "height": 150 },
+  "textContent": null
+}
+```
+
+規則：
+
+1. `annotationType` 必填，值為 `BBOX / POLYGON / TEXT`。
+2. `geometry` 需符合對應類型格式，不符合回 `400`。
+3. `textContent` 僅 `TEXT` 類型必填，其餘可為 `null`。
+4. Polygon 頂點數需 `>= 3` 且 `<= 64`，違反回 `400`。
+
 #### `PATCH /api/videos/:id/annotations/:annotationId`
 
-用途：更新人工標註 bbox 與類別
+用途：更新標註類別或可見性
+
+允許修改欄位：`categoryId`、`isVisible`
+
+> 幾何形狀建立後不支援修改（需刪除後重新繪製）。
 
 #### `DELETE /api/videos/:id/annotations/:annotationId`
 
-用途：刪除人工標註
+用途：刪除人工標註（`source=MANUAL` 才可刪；AI 來源標註不可刪）
 
 ---
 
@@ -1042,6 +1147,28 @@ Query：`frameId`, `source`, `cursor`, `limit`
    - 清理監控命中高水位：`trigger_source=CLEANUP_MONITOR`
    - 管理員手動建立/註記：`trigger_source=MANUAL`
 
+### 6.10 標註建立流程
+
+觸發：使用者在標註工具列點擊 Text / Rectangle / Polygon 工具
+
+1. **前置檢查**：
+   - 若無影片或 `timeline_status != READY`：阻擋並提示
+   - 若未選取類別：提示「請先在類別圖層選擇一個類別」，不進入繪製
+2. **模式切換**：
+   - 影片自動暫停
+   - Canvas 開始攔截滑鼠事件
+3. **繪製**（依工具）：
+   - Rectangle：拖曳畫框，顯示虛線預覽
+   - Polygon：逐點點擊，Enter 或點第一點閉合
+   - Text：點擊放置，彈出 inline 輸入框
+4. **確認後送出**：
+   - 呼叫 `POST /api/videos/:id/annotations`
+   - 標註圖層清單新增一筆（當前幀可見，其他幀不顯示）
+5. **邊界情境保護**：
+   - 繪製中 seek 到其他幀：提示放棄草稿
+   - 切換影片：強制退出標註模式並丟棄草稿
+   - Polygon 超過 64 點：阻止新增並提示上限
+
 ---
 
 ## 7. 前端模組拆分
@@ -1066,6 +1193,8 @@ Query：`frameId`, `source`, `cursor`, `limit`
 18. `useFileCleanup`（定時清理預覽與執行）
 19. `RiskSummaryCards`（`/file` 風險摘要）
 20. `useRiskEvents`（`/file` 風險事件列表）
+21. `useAnnotationTool`（標註工具模式、繪製草稿、送出確認、草稿保護）
+22. `AnnotationCanvas`（覆蓋在影片區的 SVG/Canvas，負責繪製與互動事件攔截）
 
 ---
 
@@ -1140,6 +1269,12 @@ Query：`frameId`, `source`, `cursor`, `limit`
 6. 上傳中可按「取消上傳」，且 UI 正確進入 `CANCELED`
 7. 網頁刷新後可維持目前影片與圖層渲染（先快照、後校正）
 8. 「清除當前所有資料」可將畫面回到預設，但不影響後端資料
+9. 點擊標註工具（Text / Rectangle / Polygon）即自動進入標註模式並暫停播放
+10. 未選取類別時無法繪製，提示明確
+11. 標註清單列欄位順序：類型圖標 → 類別下拉 → Info 圖標 → Eye 圖標 → 刪除圖標
+12. Info 浮層含幾何座標與幀資訊（`display_index`、`frame_id`）
+13. 類別下拉可直接變更標註所屬類別
+14. 幀切換後標註清單自動刷新為當前幀內容
 
 ### 9.2 對齊與播放
 
@@ -1236,6 +1371,18 @@ Query：`frameId`, `source`, `cursor`, `limit`
 40. `timeline.json` 產生結果包含 `frames[*].ptsUs` 且單調不遞減
 41. `latest.coco.json` annotation 含擴充欄位 `track_id/frame_index/pts_us`
 42. 呼叫 `GET /file/logout` 後需再次跳出 Basic Auth 登入視窗
+43. 點擊 Rectangle 工具後影片自動暫停
+44. 未選取類別點擊繪製工具，顯示「請先選擇類別」提示
+45. Rectangle 繪製後標註清單新增一筆，且切換到其他幀後不顯示
+46. Polygon 少於 3 點時無法閉合
+47. Text 標註 Enter 確認後顯示於影片 overlay
+48. 標註清單 Info 浮層顯示 `display_index`、`frame_id`、幾何詳情
+49. 標註清單類別下拉變更後，overlay 顏色同步更新
+50. Eye 圖標切換後該筆標註立即隱藏/顯示於 overlay
+51. `POST /api/videos/:id/annotations` Polygon 頂點數 < 3 回 `400`
+52. `POST /api/videos/:id/annotations` Polygon 頂點數 > 64 回 `400`
+53. `PATCH /api/videos/:id/annotations/:id` 成功變更 `categoryId`
+54. 繪製中 seek 到其他幀，出現放棄草稿提示
 
 ---
 
@@ -1282,3 +1429,37 @@ Query：`frameId`, `source`, `cursor`, `limit`
 | `SSE_UNSTABLE_OR_BUFFERED` | P1 | SSE 連續失敗或長時間無事件 | heartbeat + `Last-Event-ID` + `X-Accel-Buffering: no` + fallback 輪詢 | AI 狀態區 + `/file` 風險列表 |
 | `REFRESH_DATA_MISUNDERSTOOD` | P1 | 使用者刷新後誤以為資料遺失 | 刷新狀態重建 + 失效提示 + 清除當前所有資料按鈕 | Viewer 啟動畫面提示 |
 | `STORAGE_GROWTH` | P2 | 同名影片多版本累積造成空間壓力 | 定時清理（可配置 + 可預覽 + 安全保留） | `/file` 清理預覽與歷史 |
+
+---
+
+## 13. 實作追蹤 Checklist（完成/未完成）
+
+更新基準：2026-04-17（以目前 repo 與手動驗證結果為準）
+
+### 13.1 里程碑進度（Phase）
+
+- [x] Phase 1：資料基線與上傳鏈路（schema、upload、bootstrap 首屏重建）
+- [x] Phase 2：Viewer 播放與時間對齊（`mediaTime`/binary search/monotonic）
+- [x] Phase 3：AI 任務與即時狀態（SSE 主路徑 + fallback + 防重入）
+- [x] Phase 4：圖層操作與刷新保持（圖層區塊、CRUD、刷新回填、前端清除）
+- [x] Phase 5-1：`/file` admin 頁（清單、篩選、列內操作）
+- [x] Phase 5-2：一致性檢查與修復（`dry-run -> apply`）
+- [x] Phase 5-3：風險摘要卡與事件列表（含手動新增/處理）
+- [ ] Phase 5-4：cleanup 定時排程（目前決議先不實作）
+- [ ] Phase 5-5：完整收尾（全量回歸矩陣與最終交付封版）
+
+### 13.2 本輪已完成重點
+
+- [x] 真實 `ai-worker` 串接（`AI_RUNNER_MODE=worker`）
+- [x] worker 不可達時任務可收斂為 `FAILED`（`WORKER_UNREACHABLE`）
+- [x] `/file` HTTP Basic Auth 與 `/file/logout` 流程
+- [x] 風險事件 API：`GET/POST/PATCH /api/admin/file/risk-events`
+- [x] 風險時間篩選（24h / 7d / 30d / all）
+- [x] 風險事件與一致性掃描關聯（`trigger_source=CONSISTENCY_SCAN`）
+- [x] 播放時 bbox 顯示穩定（已驗證不再出現幀間閃爍）
+
+### 13.3 尚未完成 / Deferred
+
+- [ ] cleanup 定時排程（背景 job + 可配置週期）
+- [ ] cleanup 排程的觀測與告警（失敗重試、歷史追蹤）
+- [ ] 將第 10 節測試清單 54 項轉為「自動化覆蓋率盤點表」（每項對應測試檔）

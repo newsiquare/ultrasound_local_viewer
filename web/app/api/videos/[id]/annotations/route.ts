@@ -3,8 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { HttpError } from "@/server/errors";
 import {
   normalizeAnnotationFrameId,
+  normalizeAnnotationType,
   normalizeEntityId,
+  normalizeGeometry,
   normalizeManualBbox,
+  normalizeTextContent,
   parseCursor,
   parseLimit
 } from "@/server/layer-validation";
@@ -38,23 +41,36 @@ function mapAnnotation(item: {
   id: string;
   frame_id: string;
   category_id: string;
+  annotation_type: string;
+  geometry_json: string | null;
+  text_content: string | null;
+  is_visible: number;
   bbox_json: string;
   created_at: string;
   updated_at: string;
 }) {
-  let bbox: unknown = null;
+  let geometry: unknown = null;
   try {
-    bbox = JSON.parse(item.bbox_json);
+    if (item.geometry_json) {
+      geometry = JSON.parse(item.geometry_json);
+    } else {
+      // Fallback: parse legacy bbox_json
+      const b = JSON.parse(item.bbox_json) as { x: number; y: number; width: number; height: number };
+      geometry = { type: "bbox", x: b.x, y: b.y, width: b.width, height: b.height };
+    }
   } catch {
-    bbox = null;
+    geometry = null;
   }
 
   return {
     id: item.id,
     frameId: item.frame_id,
     categoryId: item.category_id,
-    bbox,
-    bboxJson: item.bbox_json,
+    annotationType: item.annotation_type,
+    geometry,
+    geometryJson: item.geometry_json ?? item.bbox_json,
+    textContent: item.text_content,
+    isVisible: item.is_visible !== 0,
     createdAt: item.created_at,
     updatedAt: item.updated_at
   };
@@ -107,7 +123,9 @@ export async function POST(req: NextRequest, context: RouteContext): Promise<Nex
     const body = (await req.json()) as Record<string, unknown>;
     const frameId = normalizeAnnotationFrameId(body.frameId);
     const categoryId = normalizeEntityId(body.categoryId, "categoryId");
-    const bbox = normalizeManualBbox(body.bbox);
+    const annotationType = normalizeAnnotationType(body.annotationType);
+    const geometry = normalizeGeometry(body.geometry, annotationType);
+    const textContent = normalizeTextContent(body.textContent, annotationType);
 
     const categoryExists = await categoryExistsForVideo(videoId, categoryId);
     if (!categoryExists) {
@@ -117,11 +135,20 @@ export async function POST(req: NextRequest, context: RouteContext): Promise<Nex
       });
     }
 
+    // For BBOX, keep bbox_json populated for legacy compatibility
+    const bboxJson =
+      annotationType === "BBOX" && geometry.type === "bbox"
+        ? JSON.stringify({ x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height })
+        : "{}";
+
     const created = await createManualAnnotation({
       videoId,
       frameId,
       categoryId,
-      bboxJson: JSON.stringify(bbox)
+      annotationType,
+      geometryJson: JSON.stringify(geometry),
+      textContent,
+      bboxJson
     });
 
     return ok(mapAnnotation(created), 201);

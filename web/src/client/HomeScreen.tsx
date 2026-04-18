@@ -22,6 +22,12 @@ export function HomeScreen() {
   const [currentDisplayIndex, setCurrentDisplayIndex] = useState<number | null>(null);
   const [currentFrameId, setCurrentFrameId] = useState<string | null>(null);
   const [isVideosLoading, setIsVideosLoading] = useState(false);
+  const [annotationRefreshKey, setAnnotationRefreshKey] = useState(0);
+  const [selectedAnnotationCategoryId, setSelectedAnnotationCategoryId] = useState<string | null>(null);
+
+  const onAnnotationMutated = useCallback(() => {
+    setAnnotationRefreshKey((k) => k + 1);
+  }, []);
 
   const loadVideos = useCallback(async () => {
     setIsVideosLoading(true);
@@ -123,6 +129,9 @@ export function HomeScreen() {
                 layerState={layerState}
                 onFrameIndexChange={setCurrentDisplayIndex}
                 onFrameIdChange={setCurrentFrameId}
+                annotationRefreshKey={annotationRefreshKey}
+                selectedAnnotationCategoryId={selectedAnnotationCategoryId}
+                onAnnotationMutated={onAnnotationMutated}
               />
             </div>
           </Panel>
@@ -149,6 +158,10 @@ export function HomeScreen() {
                 aiUpdatedAt={viewerSession.bootstrapData?.aiSummary?.aiStatsUpdatedAt ?? null}
                 currentDisplayIndex={currentDisplayIndex}
                 viewerFrameId={currentFrameId}
+                annotationRefreshKey={annotationRefreshKey}
+                selectedAnnotationCategoryId={selectedAnnotationCategoryId}
+                onAnnotationCategorySelect={setSelectedAnnotationCategoryId}
+                onAnnotationMutated={onAnnotationMutated}
               />
             </div>
           </Panel>

@@ -87,6 +87,10 @@ export interface BootstrapData {
     id: string;
     frame_id: string;
     category_id: string;
+    annotation_type: string;
+    geometry_json: string | null;
+    text_content: string | null;
+    is_visible: number;
     bbox_json: string;
     created_at: string;
     updated_at: string;
@@ -180,17 +184,38 @@ export interface CategoryItem {
   annotation_count: number;
 }
 
+export type AnnotationType = "BBOX" | "POLYGON" | "TEXT";
+
+export interface BboxGeometry {
+  type: "bbox";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PolygonGeometry {
+  type: "polygon";
+  points: Array<{ x: number; y: number }>;
+}
+
+export interface TextGeometry {
+  type: "text";
+  x: number;
+  y: number;
+}
+
+export type AnnotationGeometry = BboxGeometry | PolygonGeometry | TextGeometry;
+
 export interface AnnotationItem {
   id: string;
   frameId: string;
   categoryId: string;
-  bbox: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null;
-  bboxJson: string;
+  annotationType: AnnotationType;
+  geometry: AnnotationGeometry | null;
+  geometryJson: string;
+  textContent: string | null;
+  isVisible: boolean;
   createdAt: string;
   updatedAt: string;
 }

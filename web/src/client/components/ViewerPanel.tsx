@@ -4,15 +4,17 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { ChevronFirst, ChevronLast, HardDriveDownload, Pause, Play, RefreshCw } from "lucide-react";
 
+import { AnnotationCanvas } from "@/client/components/AnnotationCanvas";
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
 import { ViewerImageToolbar } from "@/client/components/ViewerImageToolbar";
 import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
 import { useAiStatusStream } from "@/client/hooks/useAiStatusStream";
+import { AnnotationToolType, useAnnotationTool } from "@/client/hooks/useAnnotationTool";
 import { useFrameAnnotations } from "@/client/hooks/useFrameAnnotations";
 import { useFrameTimeline } from "@/client/hooks/useFrameTimeline";
 import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
 import { useViewerImageTools } from "@/client/hooks/useViewerImageTools";
-import { AiStatus, AnnotationItem, BootstrapData } from "@/client/types";
+import { AnnotationItem, AiStatus, BootstrapData, CategoryItem } from "@/client/types";
 
 interface ViewerPanelProps {
   currentVideoId: string | null;
@@ -23,6 +25,9 @@ interface ViewerPanelProps {
   layerState: UseLayerVisibilityStateResult;
   onFrameIndexChange?: (displayIndex: number | null) => void;
   onFrameIdChange?: (frameId: string | null) => void;
+  annotationRefreshKey?: number;
+  selectedAnnotationCategoryId?: string | null;
+  onAnnotationMutated?: () => void;
 }
 
 function formatBytes(input: number): string {
@@ -48,11 +53,23 @@ function formatClock(inputSec: number): string {
 }
 
 export function ViewerPanel(props: ViewerPanelProps) {
-  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState, onFrameIndexChange, onFrameIdChange } = props;
+  const { currentVideoId, bootstrapData, loading, statusMessage, onRefresh, layerState,
+    onFrameIndexChange, onFrameIdChange,
+    annotationRefreshKey = 0,
+    selectedAnnotationCategoryId = null,
+    onAnnotationMutated
+  } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageTools = useViewerImageTools(currentVideoId);
   const timeline = useFrameTimeline({ videoId: currentVideoId, videoRef });
+
+  const annotationTool = useAnnotationTool({
+    videoId: currentVideoId,
+    frameId: timeline.currentFrame?.frameId ?? null,
+    selectedCategoryId: selectedAnnotationCategoryId,
+    onCreated: onAnnotationMutated
+  });
 
   const durationFromMeta = bootstrapData?.meta.duration_sec ?? 0;
   const sliderMax = timeline.durationSec > 0 ? timeline.durationSec : durationFromMeta > 0 ? durationFromMeta : 1;
@@ -88,13 +105,22 @@ export function ViewerPanel(props: ViewerPanelProps) {
     for (const item of bootstrapData?.annotationsCurrentWindow ?? []) {
       if (item.frame_id !== timeline.currentFrame?.frameId) continue;
       try {
-        const parsed = JSON.parse(item.bbox_json) as { x: number; y: number; width: number; height: number };
+        let geometry = null;
+        if (item.geometry_json) {
+          geometry = JSON.parse(item.geometry_json) as AnnotationItem["geometry"];
+        } else {
+          const b = JSON.parse(item.bbox_json) as { x: number; y: number; width: number; height: number };
+          geometry = { type: "bbox" as const, x: b.x, y: b.y, width: b.width, height: b.height };
+        }
         result.push({
           id: item.id,
           frameId: item.frame_id,
           categoryId: item.category_id,
-          bbox: { x: parsed.x, y: parsed.y, width: parsed.width, height: parsed.height },
-          bboxJson: item.bbox_json,
+          annotationType: (item.annotation_type ?? "BBOX") as AnnotationItem["annotationType"],
+          geometry,
+          geometryJson: item.geometry_json ?? item.bbox_json,
+          textContent: item.text_content ?? null,
+          isVisible: item.is_visible !== 0,
           createdAt: item.created_at,
           updatedAt: item.updated_at
         });
@@ -107,20 +133,14 @@ export function ViewerPanel(props: ViewerPanelProps) {
     videoId: currentVideoId,
     frameId: timeline.currentFrame?.frameId ?? null,
     enabled: Boolean(currentVideoId && layerState.annotationVisible && layerState.categoryMasterVisible && timeline.currentFrame?.frameId),
-    fallbackItems: fallbackFrameAnnotations
+    fallbackItems: fallbackFrameAnnotations,
+    refreshKey: annotationRefreshKey
   });
 
+  const categories: CategoryItem[] = bootstrapData?.categories ?? [];
+
   const currentFrameAnnotations = manualOverlay.items
-    .filter((item) => visibleCategoryIds.has(item.categoryId))
-    .map((item) => ({
-      id: item.id,
-      categoryId: item.categoryId,
-      x: item.bbox?.x ?? 0,
-      y: item.bbox?.y ?? 0,
-      width: item.bbox?.width ?? 0,
-      height: item.bbox?.height ?? 0
-    }))
-    .filter((item) => item.width > 0 && item.height > 0);
+    .filter((item) => visibleCategoryIds.has(item.categoryId) && item.isVisible);
 
   const videoSurfaceWidth = imageTools.fitToWindow ? "100%" : `${imageTools.zoomPercent}%`;
   const contrastPercent = Math.max(0, 100 + imageTools.contrast);
@@ -137,7 +157,18 @@ export function ViewerPanel(props: ViewerPanelProps) {
       }}
     >
       {/* Toolbars */}
-      <ViewerImageToolbar tools={imageTools} disabled={!currentVideoId} />
+      <ViewerImageToolbar
+        tools={imageTools}
+        disabled={!currentVideoId}
+        activeTool={annotationTool.activeTool}
+        onToolChange={(tool) => {
+          if (tool === annotationTool.activeTool) {
+            annotationTool.setActiveTool(null);
+          } else {
+            annotationTool.setActiveTool(tool as AnnotationToolType | null);
+          }
+        }}
+      />
       <ViewerAiActionDock
         status={ai.status}
         progress={ai.progress}
@@ -203,24 +234,16 @@ export function ViewerPanel(props: ViewerPanelProps) {
               />
             )}
 
-            {/* Manual annotation overlay */}
+            {/* Manual annotation overlay — now handled by AnnotationCanvas */}
             {layerState.annotationVisible && layerState.categoryMasterVisible && videoWidth > 0 && videoHeight > 0 && (
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                {currentFrameAnnotations.map((annotation) => (
-                  <div
-                    key={annotation.id}
-                    style={{
-                      position: "absolute",
-                      left: `${(annotation.x / videoWidth) * 100}%`,
-                      top: `${(annotation.y / videoHeight) * 100}%`,
-                      width: `${(annotation.width / videoWidth) * 100}%`,
-                      height: `${(annotation.height / videoHeight) * 100}%`,
-                      border: "2px solid #22d3ee",
-                      boxShadow: "0 0 0 1px rgba(0,0,0,0.6) inset"
-                    }}
-                  />
-                ))}
-              </div>
+              <AnnotationCanvas
+                videoWidth={videoWidth}
+                videoHeight={videoHeight}
+                annotations={currentFrameAnnotations}
+                categories={categories}
+                annotationTool={annotationTool}
+                annotationVisible={layerState.annotationVisible}
+              />
             )}
 
             {/* AI overlay */}

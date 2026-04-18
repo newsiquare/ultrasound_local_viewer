@@ -2,20 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Plus, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { Check, Eye, EyeOff, Info, Pentagon, Plus, RefreshCw, Square, Trash2, Type, X } from "lucide-react";
 import {
-  createAnnotation,
   createCategory,
   deleteAnnotation,
   deleteCategory,
-  fetchAnnotations,
   fetchCategories,
   updateAnnotation,
   updateCategory
 } from "@/client/api";
 import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
+import { useFrameAnnotations } from "@/client/hooks/useFrameAnnotations";
 import { UseLayerVisibilityStateResult } from "@/client/hooks/useLayerVisibilityState";
-import { AiStatus, AnnotationItem, BootstrapData, CategoryItem } from "@/client/types";
+import { AiStatus, AnnotationItem, AnnotationType, BootstrapData, CategoryItem } from "@/client/types";
 
 interface LayersPanelProps {
   videoId: string | null;
@@ -26,6 +25,14 @@ interface LayersPanelProps {
   aiUpdatedAt: string | null;
   currentDisplayIndex: number | null;
   viewerFrameId: string | null;
+  /** Increment to force annotation list refresh (shared with ViewerPanel) */
+  annotationRefreshKey?: number;
+  /** The category ID that will be used when the user draws a new annotation */
+  selectedAnnotationCategoryId?: string | null;
+  /** Called when the user selects a category to use for new annotations */
+  onAnnotationCategorySelect?: (id: string) => void;
+  /** Called after annotation delete/visibility mutations (triggers ViewerPanel refresh) */
+  onAnnotationMutated?: () => void;
 }
 
 function sortCategories(categories: CategoryItem[]): CategoryItem[] {
@@ -35,78 +42,84 @@ function sortCategories(categories: CategoryItem[]): CategoryItem[] {
   });
 }
 
+function AnnotationTypeIcon({ type }: { type: string }) {
+  if (type === "POLYGON") return <Pentagon size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
+  if (type === "TEXT") return <Type size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
+  return <Square size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
+}
+
+function formatGeometryInfo(annotation: AnnotationItem): string {
+  const g = annotation.geometry;
+  if (!g) return "無幾何資訊";
+  if (g.type === "bbox") {
+    return `x:${Math.round(g.x)} y:${Math.round(g.y)} w:${Math.round(g.width)} h:${Math.round(g.height)}`;
+  }
+  if (g.type === "polygon") {
+    return `多邊形, ${g.points.length} 頂點`;
+  }
+  if (g.type === "text") {
+    return `文字錨點 (${Math.round(g.x)}, ${Math.round(g.y)})`;
+  }
+  return "未知類型";
+}
+
+const TYPE_LABEL: Record<AnnotationType, string> = {
+  BBOX: "矩形",
+  POLYGON: "多邊形",
+  TEXT: "文字"
+};
+
 export function LayersPanel(props: LayersPanelProps) {
-  const { videoId, bootstrapData, onReload, layerState, aiStatus, aiUpdatedAt, currentDisplayIndex, viewerFrameId } = props;
+  const {
+    videoId, bootstrapData, onReload, layerState, aiStatus, aiUpdatedAt, currentDisplayIndex,
+    viewerFrameId,
+    annotationRefreshKey = 0,
+    selectedAnnotationCategoryId,
+    onAnnotationCategorySelect,
+    onAnnotationMutated
+  } = props;
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#22C55E");
-  const [newAnnotationFrameId, setNewAnnotationFrameId] = useState("f_000001");
-  const [newAnnotationCategoryId, setNewAnnotationCategoryId] = useState("");
-  const [bboxX, setBboxX] = useState("0");
-  const [bboxY, setBboxY] = useState("0");
-  const [bboxW, setBboxW] = useState("120");
-  const [bboxH, setBboxH] = useState("80");
-  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [infoOpenId, setInfoOpenId] = useState<string | null>(null);
-  const [hiddenAnnIds, setHiddenAnnIds] = useState<Set<string>>(new Set<string>());
-  const [frameNavIndex, setFrameNavIndex] = useState(0);
 
-  const aiOverlay = useAiOverlayData({
-    videoId,
-    aiStatus,
-    aiUpdatedAt,
-    currentDisplayIndex
-  });
+  const aiOverlay = useAiOverlayData({ videoId, aiStatus, aiUpdatedAt, currentDisplayIndex });
   const aiCurrentDetections = aiOverlay.detections;
 
-  const loadLayerData = useCallback(async () => {
-    if (!videoId) {
-      setCategories([]);
-      setAnnotations([]);
-      return;
-    }
+  // Per-frame annotations — shares refreshKey with ViewerPanel
+  const frameAnnotations = useFrameAnnotations({
+    videoId,
+    frameId: viewerFrameId,
+    enabled: Boolean(videoId && viewerFrameId),
+    refreshKey: annotationRefreshKey
+  });
+
+  const loadCategories = useCallback(async () => {
+    if (!videoId) { setCategories([]); return; }
     setIsLoading(true);
     try {
-      const [nextCategories, nextAnnotations] = await Promise.all([
-        fetchCategories(videoId),
-        fetchAnnotations(videoId, { source: "MANUAL", cursor: 0, limit: 200 })
-      ]);
-      const sorted = sortCategories(nextCategories);
-      setCategories(sorted);
-      setAnnotations(nextAnnotations.items);
-      if (!newAnnotationCategoryId) {
-        const firstManual = sorted.find((item) => item.source === "MANUAL") ?? sorted[0];
-        setNewAnnotationCategoryId(firstManual?.id ?? "");
-      }
-      const firstFrame = bootstrapData?.annotationsCurrentWindow[0]?.frame_id;
-      if (firstFrame && !editingAnnotationId) setNewAnnotationFrameId(firstFrame);
-      if (editingAnnotationId && !nextAnnotations.items.some((item) => item.id === editingAnnotationId)) {
-        setEditingAnnotationId(null);
-      }
+      const next = await fetchCategories(videoId);
+      setCategories(sortCategories(next));
       setNotice(null);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "載入圖層資料失敗";
-      setNotice(`圖層資料同步失敗：${msg}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [bootstrapData?.annotationsCurrentWindow, editingAnnotationId, newAnnotationCategoryId, videoId]);
+      setNotice(`類別資料同步失敗：${error instanceof Error ? error.message : "未知錯誤"}`);
+    } finally { setIsLoading(false); }
+  }, [videoId]);
 
-  useEffect(() => { void loadLayerData(); }, [loadLayerData]);
-  useEffect(() => { setFrameNavIndex(0); setHiddenAnnIds(new Set<string>()); }, [videoId]);
+  useEffect(() => { void loadCategories(); }, [loadCategories]);
+
+  // Fast-path: sync categories from bootstrap
   useEffect(() => {
-    if (viewerFrameId && !editingAnnotationId) {
-      setNewAnnotationFrameId(viewerFrameId);
+    if (bootstrapData?.categories && bootstrapData.categories.length > 0) {
+      setCategories(sortCategories(bootstrapData.categories));
     }
-  }, [viewerFrameId, editingAnnotationId]);
+  }, [bootstrapData?.categories]);
 
   const visibleCategoryCount = useMemo(() => {
     if (!layerState.categoryMasterVisible) return 0;
@@ -118,11 +131,11 @@ export function LayersPanel(props: LayersPanelProps) {
     setBusyKey(`cat-visible-${category.id}`);
     try {
       await updateCategory(videoId, category.id, { isVisible: nextVisible });
-      await Promise.all([loadLayerData(), onReload()]);
+      await Promise.all([loadCategories(), onReload()]);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "更新類別可見性失敗");
     } finally { setBusyKey(null); }
-  }, [loadLayerData, onReload, videoId]);
+  }, [loadCategories, onReload, videoId]);
 
   const handleCreateCategory = useCallback(async () => {
     if (!videoId) return;
@@ -130,91 +143,61 @@ export function LayersPanel(props: LayersPanelProps) {
     try {
       await createCategory(videoId, { name: newCategoryName, color: newCategoryColor });
       setNewCategoryName("");
-      await Promise.all([loadLayerData(), onReload()]);
+      await Promise.all([loadCategories(), onReload()]);
       setNotice("類別已新增");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "新增類別失敗");
     } finally { setBusyKey(null); }
-  }, [loadLayerData, newCategoryColor, newCategoryName, onReload, videoId]);
+  }, [loadCategories, newCategoryColor, newCategoryName, onReload, videoId]);
 
   const handleDeleteCategory = useCallback(async (category: CategoryItem) => {
     if (!videoId) return;
     setBusyKey(`delete-category-${category.id}`);
     try {
       await deleteCategory(videoId, category.id);
-      await Promise.all([loadLayerData(), onReload()]);
+      await Promise.all([loadCategories(), onReload()]);
       setNotice("類別已刪除");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "刪除類別失敗");
     } finally { setBusyKey(null); }
-  }, [loadLayerData, onReload, videoId]);
-
-  const loadAnnotationToForm = useCallback((annotation: AnnotationItem) => {
-    setEditingAnnotationId(annotation.id);
-    setNewAnnotationFrameId(annotation.frameId);
-    setNewAnnotationCategoryId(annotation.categoryId);
-    setBboxX(String(annotation.bbox?.x ?? 0));
-    setBboxY(String(annotation.bbox?.y ?? 0));
-    setBboxW(String(annotation.bbox?.width ?? 100));
-    setBboxH(String(annotation.bbox?.height ?? 80));
-  }, []);
-
-  const cancelAnnotationEditing = useCallback(() => { setEditingAnnotationId(null); setShowAddForm(false); }, []);
+  }, [loadCategories, onReload, videoId]);
 
   const handleInlineCategoryChange = useCallback(async (annotation: AnnotationItem, newCategoryId: string) => {
     if (!videoId) return;
     setBusyKey(`update-annotation-${annotation.id}`);
     try {
       await updateAnnotation(videoId, annotation.id, { categoryId: newCategoryId });
-      await Promise.all([loadLayerData(), onReload()]);
+      onAnnotationMutated?.();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "更新類別失敗");
     } finally { setBusyKey(null); }
-  }, [loadLayerData, onReload, videoId]);
+  }, [onAnnotationMutated, videoId]);
 
-  const frameIds = useMemo(() => [...new Set(annotations.map((a) => a.frameId))].sort(), [annotations]);
-  const safeFrameNavIdx = frameIds.length > 0 ? Math.min(frameNavIndex, frameIds.length - 1) : 0;
-  const currentFrameId = frameIds[safeFrameNavIdx] ?? null;
-  const visibleAnnotations = currentFrameId != null ? annotations.filter((a) => a.frameId === currentFrameId) : annotations;
-
-  const handleUpsertAnnotation = useCallback(async () => {
+  const handleToggleAnnotationVisible = useCallback(async (annotation: AnnotationItem) => {
     if (!videoId) return;
-    const x = Number(bboxX), y = Number(bboxY), width = Number(bboxW), height = Number(bboxH);
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
-      setNotice("bbox 欄位必須是有效數字");
-      return;
-    }
-    setBusyKey(editingAnnotationId ? `update-annotation-${editingAnnotationId}` : "create-annotation");
+    setBusyKey(`ann-visible-${annotation.id}`);
     try {
-      if (editingAnnotationId) {
-        await updateAnnotation(videoId, editingAnnotationId, { categoryId: newAnnotationCategoryId, bbox: { x, y, width, height } });
-        setNotice("標註已更新");
-      } else {
-        await createAnnotation(videoId, { frameId: newAnnotationFrameId, categoryId: newAnnotationCategoryId, bbox: { x, y, width, height } });
-        setNotice("標註已新增");
-      }
-      await Promise.all([loadLayerData(), onReload()]);
-      if (!editingAnnotationId) { setBboxX("0"); setBboxY("0"); setBboxW("120"); setBboxH("80"); }
-      setEditingAnnotationId(null);
-      setShowAddForm(false);
+      await updateAnnotation(videoId, annotation.id, { isVisible: !annotation.isVisible });
+      onAnnotationMutated?.();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : editingAnnotationId ? "更新標註失敗" : "新增標註失敗");
+      setNotice(error instanceof Error ? error.message : "更新可見性失敗");
     } finally { setBusyKey(null); }
-  }, [bboxH, bboxW, bboxX, bboxY, editingAnnotationId, loadLayerData, newAnnotationCategoryId, newAnnotationFrameId, onReload, videoId]);
+  }, [onAnnotationMutated, videoId]);
 
   const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
     if (!videoId) return;
     setBusyKey(`delete-annotation-${annotationId}`);
     try {
       await deleteAnnotation(videoId, annotationId);
-      await Promise.all([loadLayerData(), onReload()]);
+      onAnnotationMutated?.();
       setNotice("標註已刪除");
-      if (editingAnnotationId === annotationId) setEditingAnnotationId(null);
       setDeleteConfirmId(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "刪除標註失敗");
     } finally { setBusyKey(null); }
-  }, [editingAnnotationId, loadLayerData, onReload, videoId]);
+  }, [onAnnotationMutated, videoId]);
+
+  const activeCategory = categories.find((c) => c.id === selectedAnnotationCategoryId) ?? null;
 
   return (
     <div
@@ -241,7 +224,7 @@ export function LayersPanel(props: LayersPanelProps) {
         <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#9699b0", textTransform: "uppercase", letterSpacing: 0.8 }}>圖層面板</span>
         <button
           type="button"
-          onClick={() => void loadLayerData()}
+          onClick={() => void loadCategories()}
           disabled={!videoId || isLoading}
           title="刷新圖層"
           style={{
@@ -334,12 +317,27 @@ export function LayersPanel(props: LayersPanelProps) {
           {categories.map((category) => {
             const rowVisible = layerState.categoryMasterVisible && category.is_visible !== 0;
             const rowBusy = busyKey === `cat-visible-${category.id}` || busyKey === `delete-category-${category.id}`;
+            const isSelected = category.id === selectedAnnotationCategoryId;
             return (
               <div
                 key={category.id}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px", borderRadius: 5, marginBottom: 2 }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "4px 4px", borderRadius: 5, marginBottom: 2,
+                  background: isSelected ? "rgba(79,140,255,0.06)" : "transparent",
+                  border: isSelected ? "1px solid rgba(79,140,255,0.25)" : "1px solid transparent"
+                }}
               >
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: category.color, flexShrink: 0 }} />
+                <button
+                  type="button"
+                  onClick={() => onAnnotationCategorySelect?.(category.id)}
+                  style={{
+                    width: 10, height: 10, borderRadius: 2, background: category.color,
+                    flexShrink: 0, border: isSelected ? "1px solid #4f8cff" : "1px solid transparent",
+                    cursor: "pointer", padding: 0
+                  }}
+                  title={`設為標註類別：${category.name}`}
+                />
                 <button
                   type="button"
                   onClick={() => { void handleToggleCategoryVisible(category, !rowVisible); }}
@@ -349,7 +347,9 @@ export function LayersPanel(props: LayersPanelProps) {
                 >
                   {rowVisible ? <Eye size={11} /> : <EyeOff size={11} />}
                 </button>
-                <span style={{ flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#7880a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ flex: 1, fontSize: 12, color: rowVisible ? "#c8cae8" : "#7880a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}
+                  onClick={() => onAnnotationCategorySelect?.(category.id)}
+                >
                   {category.name}
                 </span>
                 <span style={{ fontSize: 10, color: "#585a78", flexShrink: 0 }}>#{category.annotation_count}</span>
@@ -370,12 +370,12 @@ export function LayersPanel(props: LayersPanelProps) {
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "#252638", margin: "0 0" }} />
+        <div style={{ height: 1, background: "#252638" }} />
 
         {/* ── Section 2: 標註圖層 ── */}
         <div style={{ padding: "8px 10px 10px" }}>
           {/* Section header */}
-          <div style={{ display: "flex", alignItems: "center", height: 30, gap: 4, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", height: 30, gap: 6, marginBottom: 8 }}>
             <button
               type="button"
               onClick={() => layerState.setAnnotationVisible(!layerState.annotationVisible)}
@@ -385,127 +385,52 @@ export function LayersPanel(props: LayersPanelProps) {
               {layerState.annotationVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
             <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#d4d6f0" }}>標註圖層</span>
-            <button
-              type="button"
-              onClick={() => setFrameNavIndex((i) => Math.max(0, i - 1))}
-              disabled={frameIds.length === 0 || safeFrameNavIdx === 0}
-              style={iconBtnStyle(false)}
-              title="上一幀"
-            >
-              <ChevronLeft size={12} />
-            </button>
-            <div
-              style={{
-                minWidth: 28, textAlign: "center", padding: "0 4px",
-                height: 22, lineHeight: "22px",
-                background: "#171824", border: "1px solid #3c3e58",
-                borderRadius: 5, fontSize: 11, color: "#d4d6f0",
-                fontVariantNumeric: "tabular-nums"
-              }}
-            >
-              {frameIds.length === 0 ? "—" : safeFrameNavIdx}
-            </div>
-            <button
-              type="button"
-              onClick={() => setFrameNavIndex((i) => Math.min(frameIds.length - 1, i + 1))}
-              disabled={frameIds.length === 0 || safeFrameNavIdx >= frameIds.length - 1}
-              style={iconBtnStyle(false)}
-              title="下一幀"
-            >
-              <ChevronRight size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowAddForm((v) => !v); setEditingAnnotationId(null); }}
-              disabled={!videoId}
-              style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 22, height: 22, borderRadius: 5, border: "1px solid",
-                borderColor: showAddForm ? "rgba(79,140,255,0.3)" : "#3c3e58",
-                background: showAddForm ? "rgba(79,140,255,0.15)" : "transparent",
-                color: showAddForm ? "#4f8cff" : "#9699b0",
-                cursor: !videoId ? "not-allowed" : "pointer", flexShrink: 0
-              }}
-              title={showAddForm ? "收合" : "新增標註"}
-            >
-              {showAddForm ? <X size={12} /> : <Plus size={12} />}
-            </button>
+            {frameAnnotations.loading && (
+              <RefreshCw size={11} style={{ color: "#7880a0", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+            )}
+            <span style={{ fontSize: 10, color: "#585a78", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+              {frameAnnotations.items.length > 0 ? `${frameAnnotations.items.length} 個` : ""}
+            </span>
           </div>
 
-          {/* Collapsible upsert form */}
-          {(showAddForm || editingAnnotationId) && (
+          {/* Active category for drawing */}
+          {activeCategory && (
             <div
               style={{
-                background: "#171824", border: "1px solid #3c3e58",
-                borderRadius: 6, padding: "8px 8px 6px",
-                marginBottom: 10, display: "flex", flexDirection: "column", gap: 5
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "4px 8px", marginBottom: 8,
+                background: "rgba(79,140,255,0.08)",
+                border: "1px solid rgba(79,140,255,0.2)",
+                borderRadius: 5, fontSize: 11, color: "#9cacf5"
               }}
             >
-              <input
-                value={newAnnotationFrameId}
-                onChange={(e) => setNewAnnotationFrameId(e.target.value)}
-                placeholder="Frame ID（如 f_000001）"
-                disabled={!videoId || Boolean(editingAnnotationId)}
-                style={{ width: "100%", boxSizing: "border-box" }}
-              />
-              <select
-                value={newAnnotationCategoryId}
-                onChange={(e) => setNewAnnotationCategoryId(e.target.value)}
-                disabled={!videoId}
-                style={{ width: "100%", boxSizing: "border-box" }}
-              >
-                <option value="">選擇類別</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                {([["x", bboxX, setBboxX], ["y", bboxY, setBboxY], ["w", bboxW, setBboxW], ["h", bboxH, setBboxH]] as const).map(([label, val, setter]) => (
-                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                    <span style={{ fontSize: 10, color: "#9699b0", width: 10, flexShrink: 0 }}>{label}</span>
-                    <input
-                      value={val}
-                      onChange={(e) => setter(e.target.value)}
-                      placeholder={label}
-                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box" }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => void handleUpsertAnnotation()}
-                  disabled={!videoId || !newAnnotationCategoryId || busyKey === "create-annotation" || busyKey === `update-annotation-${editingAnnotationId}`}
-                  style={actionBtnStyle("primary", !videoId || !newAnnotationCategoryId)}
-                >
-                  {editingAnnotationId ? "更新標註" : "新增標註"}
-                </button>
-                {editingAnnotationId && (
-                  <button type="button" onClick={cancelAnnotationEditing} style={actionBtnStyle("ghost", false)}>
-                    取消
-                  </button>
-                )}
-              </div>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: activeCategory.color, flexShrink: 0 }} />
+              <span>繪製類別：{activeCategory.name}</span>
             </div>
           )}
 
-          {/* Empty state */}
-          {visibleAnnotations.length === 0 && (
+          {/* No frame selected */}
+          {!viewerFrameId && (
             <div style={{ fontSize: 12, color: "#585a78", padding: "4px 0", textAlign: "center" }}>
-              {annotations.length === 0 ? "尚無人工標註" : "此幀無標註"}
+              請先播放影片至某一幀
             </div>
           )}
 
-          {/* Single-row annotation list */}
+          {/* Empty frame */}
+          {viewerFrameId && !frameAnnotations.loading && frameAnnotations.items.length === 0 && (
+            <div style={{ fontSize: 12, color: "#585a78", padding: "8px 0", textAlign: "center", lineHeight: 1.5 }}>
+              此幀無手動標註<br />
+              <span style={{ fontSize: 11 }}>請使用工具列中的矩形 / 多邊形 / 文字工具繪製</span>
+            </div>
+          )}
+
+          {/* Annotation rows */}
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {visibleAnnotations.map((item) => {
+            {frameAnnotations.items.map((item) => {
               const cat = categories.find((c) => c.id === item.categoryId);
-              const isHidden = hiddenAnnIds.has(item.id);
               const isInfoOpen = infoOpenId === item.id;
-              const isEditing = editingAnnotationId === item.id;
               const isConfirming = deleteConfirmId === item.id;
-              const rowBusy = busyKey === `delete-annotation-${item.id}`;
+              const rowBusy = busyKey === `delete-annotation-${item.id}` || busyKey === `ann-visible-${item.id}` || busyKey === `update-annotation-${item.id}`;
 
               return (
                 <div key={item.id}>
@@ -513,11 +438,15 @@ export function LayersPanel(props: LayersPanelProps) {
                     style={{
                       display: "flex", alignItems: "center", height: 34, gap: 5, padding: "0 6px",
                       borderRadius: isInfoOpen ? "6px 6px 0 0" : 6,
-                      border: `1px solid ${isEditing ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
-                      background: isEditing ? "rgba(79,140,255,0.06)" : "#171824"
+                      border: `1px solid ${isInfoOpen ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
+                      background: "#171824",
+                      opacity: item.isVisible ? 1 : 0.5
                     }}
                   >
-                    <Square size={13} style={{ color: "#7880a0", flexShrink: 0 }} />
+                    {/* Type icon */}
+                    <AnnotationTypeIcon type={item.annotationType} />
+
+                    {/* Color dot + category dropdown */}
                     <div
                       style={{
                         display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 4,
@@ -529,7 +458,7 @@ export function LayersPanel(props: LayersPanelProps) {
                       <select
                         value={item.categoryId}
                         onChange={(e) => void handleInlineCategoryChange(item, e.target.value)}
-                        disabled={!videoId || Boolean(busyKey)}
+                        disabled={!videoId || rowBusy}
                         style={{
                           flex: 1, minWidth: 0, background: "transparent", border: "none",
                           color: "#c8cae8", fontSize: 11, cursor: "pointer",
@@ -539,17 +468,29 @@ export function LayersPanel(props: LayersPanelProps) {
                         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
-                    <button type="button" onClick={() => setInfoOpenId(isInfoOpen ? null : item.id)} style={iconBtnStyle(isInfoOpen)} title="詳細資訊">
-                      <Info size={12} />
-                    </button>
+
+                    {/* Info toggle */}
                     <button
                       type="button"
-                      onClick={() => setHiddenAnnIds((prev) => { const next = new Set(prev); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; })}
-                      style={iconBtnStyle(!isHidden)}
-                      title={isHidden ? "顯示" : "隱藏"}
+                      onClick={() => setInfoOpenId(isInfoOpen ? null : item.id)}
+                      style={iconBtnStyle(isInfoOpen)}
+                      title="詳細資訊"
                     >
-                      {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                      <Info size={12} />
                     </button>
+
+                    {/* Eye toggle (persisted to server) */}
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleAnnotationVisible(item)}
+                      disabled={rowBusy}
+                      style={iconBtnStyle(item.isVisible)}
+                      title={item.isVisible ? "隱藏標註" : "顯示標註"}
+                    >
+                      {item.isVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+                    </button>
+
+                    {/* Delete with confirm */}
                     {isConfirming ? (
                       <>
                         <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "nowrap" }}>刪除？</span>
@@ -561,11 +502,18 @@ export function LayersPanel(props: LayersPanelProps) {
                         </button>
                       </>
                     ) : (
-                      <button type="button" onClick={() => setDeleteConfirmId(item.id)} style={iconBtnStyle(false, "danger")} title="刪除標註">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmId(item.id)}
+                        style={iconBtnStyle(false, "danger")}
+                        title="刪除標註"
+                      >
                         <Trash2 size={12} />
                       </button>
                     )}
                   </div>
+
+                  {/* Info popover */}
                   {isInfoOpen && (
                     <div
                       style={{
@@ -573,20 +521,22 @@ export function LayersPanel(props: LayersPanelProps) {
                         border: "1px solid #3c3e58", borderTop: "none",
                         borderRadius: "0 0 6px 6px",
                         fontSize: 11, color: "#c9ccd8",
-                        display: "flex", flexDirection: "column", gap: 3
+                        display: "flex", flexDirection: "column", gap: 4
                       }}
                     >
-                      <span>幀：{item.frameId}</span>
-                      <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                        x:{item.bbox?.x ?? "?"} y:{item.bbox?.y ?? "?"}&nbsp; w:{item.bbox?.width ?? "?"} h:{item.bbox?.height ?? "?"}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <span style={{ color: "#d4d6f0", fontWeight: 600 }}>{TYPE_LABEL[item.annotationType] ?? item.annotationType}</span>
+                        <span style={{ color: "#9699b0" }}>幀：{item.frameId}</span>
+                      </div>
+                      <span style={{ fontVariantNumeric: "tabular-nums", color: "#a8aac8" }}>
+                        {formatGeometryInfo(item)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => { loadAnnotationToForm(item); setShowAddForm(true); setInfoOpenId(null); }}
-                        style={{ ...actionBtnStyle("ghost", false), marginTop: 4, alignSelf: "flex-start" }}
-                      >
-                        編輯
-                      </button>
+                      {item.textContent && (
+                        <span style={{ color: "#d4d6f0" }}>內容：{item.textContent}</span>
+                      )}
+                      <span style={{ fontSize: 10, color: "#585a78" }}>
+                        建立：{new Date(item.createdAt).toLocaleString("zh-TW")}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -640,7 +590,7 @@ export function LayersPanel(props: LayersPanelProps) {
             <div style={{ fontSize: 11, color: "#585a78", padding: "8px 0", textAlign: "center" }}>無 AI 資料</div>
           )}
           {!aiOverlay.loading && aiOverlay.hasData && aiCurrentDetections.length === 0 && (
-            <div style={{ fontSize: 11, color: "#585a78", padding: "8px 0", textAlign: "center" }}>此兤無偉測結果</div>
+            <div style={{ fontSize: 11, color: "#585a78", padding: "8px 0", textAlign: "center" }}>此幀無偵測結果</div>
           )}
           {!aiOverlay.loading && aiCurrentDetections.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 8 }}>
