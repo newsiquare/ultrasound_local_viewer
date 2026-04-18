@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { ChevronFirst, ChevronLast, HardDriveDownload, Pause, Play, RefreshCw } from "lucide-react";
+import { ChevronFirst, ChevronLast, HardDriveDownload, Pause, Play, RefreshCw, SkipBack, SkipForward } from "lucide-react";
 
 import { AnnotationCanvas } from "@/client/components/AnnotationCanvas";
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
@@ -38,15 +38,6 @@ interface ViewerPanelProps {
   onAiDetectionSelect?: (id: number | null) => void;
   /** Confidence threshold 0-1 for filtering AI bbox display */
   aiConfidenceThreshold?: number;
-}
-
-function formatBytes(input: number): string {
-  if (!Number.isFinite(input) || input <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = input;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) { value /= 1024; unitIndex++; }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
 function formatClock(inputSec: number): string {
@@ -101,6 +92,64 @@ export function ViewerPanel(props: ViewerPanelProps) {
     onFrameIndexChange?.(timeline.currentFrame?.displayIndex ?? null);
     onFrameIdChange?.(timeline.currentFrame?.frameId ?? null);
   }, [onFrameIdChange, onFrameIndexChange, timeline.currentFrame?.displayIndex, timeline.currentFrame?.frameId]);
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ignore when typing in an input/textarea/contenteditable
+    const target = e.target as HTMLElement;
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+    switch (e.key) {
+      case "+": case "=":
+        e.preventDefault();
+        imageTools.zoomIn();
+        break;
+      case "-":
+        e.preventDefault();
+        imageTools.zoomOut();
+        break;
+      case "f": case "F":
+        e.preventDefault();
+        imageTools.setFitToWindow(true);
+        break;
+      case "r": case "R":
+        e.preventDefault();
+        annotationTool.setActiveTool(annotationTool.activeTool === "RECT" ? null : "RECT");
+        break;
+      case "p": case "P":
+        e.preventDefault();
+        annotationTool.setActiveTool(annotationTool.activeTool === "POLYGON" ? null : "POLYGON");
+        break;
+      case "t": case "T":
+        e.preventDefault();
+        annotationTool.setActiveTool(annotationTool.activeTool === "TEXT" ? null : "TEXT");
+        break;
+      case "s": case "S":
+        e.preventDefault();
+        annotationTool.setActiveTool(null);
+        break;
+      case "Escape":
+        annotationTool.setActiveTool(null);
+        break;
+      case " ":
+        e.preventDefault();
+        void timeline.togglePlayPause();
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        timeline.stepPrevFrame();
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        timeline.stepNextFrame();
+        break;
+    }
+  }, [annotationTool, imageTools, timeline]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const timelineReady = bootstrapData?.timelineSummary.timelineStatus === "READY";
   const videoWidth = bootstrapData?.meta.video_width ?? 0;
@@ -355,113 +404,85 @@ export function ViewerPanel(props: ViewerPanelProps) {
           }}
         >
           {/* Timeline slider */}
-          <input
-            type="range"
-            min={0}
-            max={sliderMax}
-            step={0.001}
-            value={Math.min(sliderValue, sliderMax)}
-            onPointerDown={timeline.startScrub}
-            onPointerUp={() => void timeline.endScrub()}
-            onPointerCancel={() => void timeline.endScrub()}
-            onChange={(e) => timeline.updateScrubTime(Number(e.target.value))}
-          />
+          {(() => {
+            const pct = sliderMax > 0 ? (Math.min(sliderValue, sliderMax) / sliderMax) * 100 : 0;
+            const trackColor = "#2a2d42";
+            const fillColor = timeline.isScrubbing ? "#60a5fa" : "#4f8cff";
+            return (
+              <input
+                type="range"
+                className="scrubber"
+                min={0}
+                max={sliderMax}
+                step={0.001}
+                value={Math.min(sliderValue, sliderMax)}
+                onPointerDown={timeline.startScrub}
+                onPointerUp={() => void timeline.endScrub()}
+                onPointerCancel={() => void timeline.endScrub()}
+                onChange={(e) => timeline.updateScrubTime(Number(e.target.value))}
+                style={{
+                  "--scrubber-pct": `${pct}%`,
+                  "--scrubber-fill": fillColor,
+                  "--scrubber-track": trackColor,
+                } as React.CSSProperties}
+              />
+            );
+          })()}
 
           {/* Controls row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <PlayBtn
-              onClick={() => timeline.stepPrevFrame()}
-              disabled={timeline.frames.length === 0}
-              title="上一幀"
-            >
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            {/* Center group */}
+            <PlayBtn onClick={() => timeline.seekToStart()} disabled={timeline.frames.length === 0} title="回到最前面">
+              <SkipBack size={16} />
+            </PlayBtn>
+
+            <PlayBtn onClick={() => timeline.stepPrevFrame()} disabled={timeline.frames.length === 0} title="上一幀">
               <ChevronFirst size={16} />
             </PlayBtn>
 
-            <PlayBtn
-              onClick={() => void timeline.togglePlayPause()}
-              title={timeline.isPlaying ? "暫停" : "播放"}
-            >
+            <PlayBtn onClick={() => void timeline.togglePlayPause()} title={timeline.isPlaying ? "暫停" : "播放"}>
               {timeline.isPlaying ? <Pause size={16} /> : <Play size={16} />}
             </PlayBtn>
 
-            <PlayBtn
-              onClick={() => timeline.stepNextFrame()}
-              disabled={timeline.frames.length === 0}
-              title="下一幀"
-            >
+            <PlayBtn onClick={() => timeline.stepNextFrame()} disabled={timeline.frames.length === 0} title="下一幀">
               <ChevronLast size={16} />
             </PlayBtn>
 
-            {/* Time display */}
-            <span
-              style={{
-                fontSize: 12,
-                color: "#c9ccd8",
-                fontVariantNumeric: "tabular-nums",
-                marginLeft: 4,
-                flexShrink: 0
-              }}
-            >
+            <PlayBtn onClick={() => timeline.seekToEnd()} disabled={timeline.frames.length === 0} title="跳到最後面">
+              <SkipForward size={16} />
+            </PlayBtn>
+
+            <span style={{ fontSize: 12, color: "#c9ccd8", fontVariantNumeric: "tabular-nums", marginLeft: 8, flexShrink: 0 }}>
               {formatClock(timeline.currentTimeSec)} / {formatClock(sliderMax)}
             </span>
 
-            <div style={{ flex: 1 }} />
-
-            {/* Playback rate */}
-            <select
-              value={timeline.playbackRate}
-              onChange={(e) => timeline.setPlaybackRate(Number(e.target.value))}
-              style={{ fontSize: 11, padding: "2px 4px", height: 24 }}
-              title="倍速"
-            >
+            {/* Right group — absolute so center group stays truly centered */}
+            <div style={{ position: "absolute", right: 0, display: "flex", alignItems: "center", gap: 2 }}>
               {[0.25, 0.5, 1, 1.5, 2].map((rate) => (
-                <option key={rate} value={rate}>{rate}x</option>
+                <button
+                  key={rate}
+                  type="button"
+                  className={`rate-btn${timeline.playbackRate === rate ? " active" : ""}`}
+                  onClick={() => timeline.setPlaybackRate(rate)}
+                  title={`${rate}x`}
+                >
+                  {rate}x
+                </button>
               ))}
-            </select>
-
-            {/* Refresh */}
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              disabled={loading}
-              title="重新校正資料"
-              style={{
-                background: "none",
-                border: "none",
-                padding: 4,
-                cursor: loading ? "not-allowed" : "pointer",
-                color: "#7880a0",
-                display: "flex",
-                alignItems: "center",
-                borderRadius: 4
-              }}
-            >
-              <RefreshCw size={13} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
-            </button>
+              <button
+                type="button"
+                onClick={() => void onRefresh()}
+                disabled={loading}
+                title="重新校正資料"
+                className="play-btn"
+                style={{ width: 26, height: 26, marginLeft: 2 }}
+              >
+                <RefreshCw size={13} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
+              </button>
+            </div>
           </div>
 
-          {/* Status line */}
-          {bootstrapData && (
-            <div
-              style={{
-                fontSize: 11,
-                color: "#7880a0",
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                fontVariantNumeric: "tabular-nums"
-              }}
-            >
-              <span>{bootstrapData.meta.video_width}×{bootstrapData.meta.video_height}</span>
-              <span>{bootstrapData.meta.source_fps ?? "?"}fps</span>
-              <span>f:{String(timeline.currentFrame?.displayIndex ?? 0).padStart(3, "0")}</span>
-              <span>pts:{timeline.currentFrame?.ptsUs ?? "-"}</span>
-              <span>{formatBytes(bootstrapData.meta.file_size_bytes)}</span>
-              <span style={{ color: "#585a78" }}>
-                timeline:{bootstrapData.timelineSummary.totalFrames}f · ai:{aiOverlay.detections.length} · ann:{currentFrameAnnotations.length}
-              </span>
-            </div>
-          )}
+
         </div>
       )}
 
@@ -499,20 +520,8 @@ function PlayBtn(props: {
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 28,
-        height: 28,
-        borderRadius: 5,
-        background: "transparent",
-        border: "none",
-        color: disabled ? "#52547a" : "#d4d6f0",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        flexShrink: 0
-      }}
+      className="play-btn"
+      style={disabled ? { color: "#52547a", opacity: 0.5, cursor: "not-allowed" } : undefined}
     >
       {children}
     </button>

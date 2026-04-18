@@ -1,6 +1,8 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { RefreshCw, Search, Trash2, X, XCircle } from "lucide-react";
 
 import { VideoListItem } from "@/client/types";
 
@@ -10,6 +12,16 @@ interface VideosListPanelProps {
   loading: boolean;
   onSelect: (videoId: string) => void;
   onReload: () => Promise<void>;
+  onDelete?: (videoId: string) => void;
+  onClearAi?: (videoId: string) => void;
+}
+
+interface CtxMenu {
+  x: number;
+  y: number;
+  videoId: string;
+  filename: string;
+  aiStatus: string;
 }
 
 function statusDot(aiStatus: string, timelineStatus: string): { color: string; title: string } {
@@ -21,7 +33,27 @@ function statusDot(aiStatus: string, timelineStatus: string): { color: string; t
 }
 
 export function VideosListPanel(props: VideosListPanelProps) {
-  const { items, currentVideoId, loading, onSelect, onReload } = props;
+  const { items, currentVideoId, loading, onSelect, onReload, onDelete, onClearAi } = props;
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  const closeMenu = useCallback(() => setCtxMenu(null), []);
+
+  // Close context menu on outside click or scroll
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handleDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) closeMenu();
+    };
+    document.addEventListener("mousedown", handleDown);
+    document.addEventListener("scroll", closeMenu, true);
+    return () => {
+      document.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [ctxMenu, closeMenu]);
 
   return (
     <div
@@ -68,15 +100,80 @@ export function VideosListPanel(props: VideosListPanelProps) {
         </button>
       </div>
 
+      {/* Search bar */}
+      <div style={{ padding: "6px 10px", borderBottom: "1px solid #252638", flexShrink: 0 }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          <Search size={12} style={{ position: "absolute", left: 8, color: "#585a78", pointerEvents: "none", flexShrink: 0 }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋檔名…"
+            style={{
+              width: "100%",
+              background: "#0a0b14",
+              border: "1px solid #252638",
+              borderRadius: 5,
+              color: "#d4d6f0",
+              fontSize: 12,
+              padding: "5px 24px 5px 26px",
+              outline: "none",
+              fontFamily: "inherit"
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{ position: "absolute", right: 6, background: "none", border: "none", padding: 0, cursor: "pointer", color: "#585a78", display: "flex", alignItems: "center" }}
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+        {/* Status filter chips */}
+        <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+          {(["ALL", "IDLE", "PROCESSING", "DONE", "FAILED"] as const).map((s) => {
+            const active = statusFilter === s;
+            const chipColor: Record<string, string> = { IDLE: "#7880a0", PROCESSING: "#fbbf24", DONE: "#34d399", FAILED: "#f87171", ALL: "#4f8cff" };
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                style={{
+                  fontSize: 10,
+                  padding: "2px 7px",
+                  borderRadius: 10,
+                  border: `1px solid ${active ? chipColor[s] : "#3c3e58"}`,
+                  background: active ? `${chipColor[s]}22` : "transparent",
+                  color: active ? chipColor[s] : "#585a78",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.1s"
+                }}
+              >
+                {s === "ALL" ? "全部" : s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
-        {items.length === 0 && !loading ? (
-          <div style={{ padding: "20px 12px", fontSize: 12, color: "#585a78", textAlign: "center" }}>
-            暫無影片
-          </div>
-        ) : null}
-
-        {items.map((item) => {
+        {(() => {
+          const filtered = items.filter((item) => {
+            const matchQuery = searchQuery === "" || item.filename.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchStatus = statusFilter === "ALL" || item.ai_status === statusFilter;
+            return matchQuery && matchStatus;
+          });
+          if (filtered.length === 0) return (
+            <div style={{ padding: "20px 12px", fontSize: 12, color: "#585a78", textAlign: "center" }}>
+              {items.length === 0 ? "暫無影片" : "無符合結果"}
+            </div>
+          );
+          return filtered.map((item) => {
           const isSelected = item.id === currentVideoId;
           const dot = statusDot(item.ai_status, item.timeline_status);
 
@@ -85,6 +182,10 @@ export function VideosListPanel(props: VideosListPanelProps) {
               key={item.id}
               type="button"
               onClick={() => onSelect(item.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY, videoId: item.id, filename: item.filename, aiStatus: item.ai_status });
+              }}
               style={{
                 display: "block",
                 width: "100%",
@@ -129,10 +230,79 @@ export function VideosListPanel(props: VideosListPanelProps) {
               </div>
             </button>
           );
-        })}
+        });
+        })()}
       </div>
+
+      {/* Context Menu */}
+      {ctxMenu && (
+        <div
+          ref={menuRef}
+          style={{
+            position: "fixed",
+            top: ctxMenu.y,
+            left: ctxMenu.x,
+            zIndex: 9999,
+            background: "#1a1c2e",
+            border: "1px solid #3c3e58",
+            borderRadius: 6,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            padding: "4px 0",
+            minWidth: 180
+          }}
+        >
+          {/* Title */}
+          <div style={{
+            padding: "4px 12px 6px",
+            fontSize: 11,
+            color: "#585a78",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            borderBottom: "1px solid #252638",
+            marginBottom: 4
+          }}>
+            {ctxMenu.filename}
+          </div>
+          {onClearAi && ctxMenu.aiStatus === "DONE" && (
+            <button
+              type="button"
+              onClick={() => { closeMenu(); onClearAi(ctxMenu.videoId); }}
+              style={ctxMenuItemStyle}
+            >
+              <XCircle size={13} style={{ flexShrink: 0 }} />
+              清除 AI 結果
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => { closeMenu(); onDelete(ctxMenu.videoId); }}
+              style={{ ...ctxMenuItemStyle, color: "#f87171" }}
+            >
+              <Trash2 size={13} style={{ flexShrink: 0 }} />
+              刪除影片
+            </button>
+          )}
+        </div>
+      )}
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
+
+const ctxMenuItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  width: "100%",
+  padding: "6px 12px",
+  background: "transparent",
+  border: "none",
+  color: "#c8cae8",
+  fontSize: 13,
+  cursor: "pointer",
+  textAlign: "left",
+  fontFamily: "inherit"
+};

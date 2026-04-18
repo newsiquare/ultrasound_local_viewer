@@ -402,8 +402,7 @@ export function LayersPanel(props: LayersPanelProps) {
           })}
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: "#252638" }} />
+        <div style={{ borderTop: "1px solid #252638", margin: "4px 10px" }} />
 
         {/* ── Section 2: 標註圖層 ── */}
         <div style={{ padding: "8px 10px 10px" }}>
@@ -588,8 +587,7 @@ export function LayersPanel(props: LayersPanelProps) {
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: "#252638" }} />
+        <div style={{ borderTop: "1px solid #252638", margin: "4px 10px" }} />
 
         {/* ── Section 3: AI 圖層 ── */}
         <div style={{ padding: "8px 10px 12px" }}>

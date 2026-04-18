@@ -6,6 +6,7 @@ import { Group as PanelGroup, Panel, Separator as PanelSeparator } from "react-r
 
 import { clearAiResult, createAnnotation, deleteVideo, fetchVideosList, updateAnnotation } from "@/client/api";
 import { LayersPanel } from "@/client/components/LayersPanel";
+import { StatusBar } from "@/client/components/StatusBar";
 import { AiStatus, AnnotationGeometry } from "@/client/types";
 import { AiOverlayDetection } from "@/client/ai-overlay-stability";
 import { TopBar } from "@/client/components/TopBar";
@@ -104,10 +105,22 @@ export function HomeScreen() {
     await loadVideos();
   }, [loadVideos, viewerSession]);
 
+  const onDeleteVideo = useCallback(async (videoId: string) => {
+    await deleteVideo(videoId);
+    if (viewerSession.currentVideoId === videoId) viewerSession.setCurrentVideoId(null);
+    await loadVideos();
+  }, [loadVideos, viewerSession]);
+
   const onClearAiResult = useCallback(async () => {
     if (!viewerSession.currentVideoId) return;
     await clearAiResult(viewerSession.currentVideoId);
     await viewerSession.revalidateBootstrap();
+    await loadVideos();
+  }, [loadVideos, viewerSession]);
+
+  const onClearAiResultForVideo = useCallback(async (videoId: string) => {
+    await clearAiResult(videoId);
+    if (viewerSession.currentVideoId === videoId) await viewerSession.revalidateBootstrap();
     await loadVideos();
   }, [loadVideos, viewerSession]);
 
@@ -147,6 +160,8 @@ export function HomeScreen() {
                 loading={isVideosLoading}
                 onSelect={onSelectVideo}
                 onReload={loadVideos}
+                onDelete={onDeleteVideo}
+                onClearAi={onClearAiResultForVideo}
               />
             </div>
           </Panel>
@@ -227,6 +242,10 @@ export function HomeScreen() {
           </Panel>
         </PanelGroup>
       </div>
+      <StatusBar
+        bootstrapData={viewerSession.bootstrapData}
+        currentDisplayIndex={currentDisplayIndex}
+      />
     </div>
   );
 }
