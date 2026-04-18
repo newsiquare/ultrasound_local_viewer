@@ -76,6 +76,7 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Ne
     const patch: {
       categoryId?: string;
       isVisible?: boolean;
+      geometryJson?: string;
     } = {};
 
     if (body.categoryId !== undefined) {
@@ -95,6 +96,13 @@ export async function PATCH(req: NextRequest, context: RouteContext): Promise<Ne
         throw new HttpError(400, "BAD_REQUEST", "isVisible must be a boolean.");
       }
       patch.isVisible = body.isVisible;
+    }
+
+    if (body.geometry !== undefined) {
+      if (typeof body.geometry !== "object" || body.geometry === null) {
+        throw new HttpError(400, "BAD_REQUEST", "geometry must be an object.");
+      }
+      patch.geometryJson = JSON.stringify(body.geometry);
     }
 
     const updated = await updateAnnotation(videoId, annotationId, patch);

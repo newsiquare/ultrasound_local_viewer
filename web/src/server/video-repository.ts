@@ -515,6 +515,7 @@ export async function updateAnnotation(
   patch: {
     categoryId?: string;
     isVisible?: boolean;
+    geometryJson?: string;
   }
 ): Promise<AnnotationRow | null> {
   assertUuidV7(videoId);
@@ -524,6 +525,9 @@ export async function updateAnnotation(
   }
   if (patch.isVisible !== undefined) {
     sets.push(`is_visible = ${sqlBoolean(patch.isVisible)}`);
+  }
+  if (patch.geometryJson !== undefined) {
+    sets.push(`geometry_json = ${sqlString(patch.geometryJson)}`);
   }
   if (sets.length === 0) {
     return getAnnotationById(videoId, annotationId);

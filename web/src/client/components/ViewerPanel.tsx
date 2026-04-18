@@ -27,7 +27,17 @@ interface ViewerPanelProps {
   onFrameIdChange?: (frameId: string | null) => void;
   annotationRefreshKey?: number;
   selectedAnnotationCategoryId?: string | null;
+  selectedAnnotationId?: string | null;
   onAnnotationMutated?: () => void;
+  onAnnotationSelect?: (id: string | null) => void;
+  onAnnotationUpdated?: (id: string, geometry: import("@/client/types").AnnotationGeometry) => void;
+  /** AI detection id being hovered in LayersPanel */
+  hoveredAiId?: number | null;
+  /** AI detection id selected in LayersPanel */
+  selectedAiId?: number | null;
+  onAiDetectionSelect?: (id: number | null) => void;
+  /** Confidence threshold 0-1 for filtering AI bbox display */
+  aiConfidenceThreshold?: number;
 }
 
 function formatBytes(input: number): string {
@@ -57,7 +67,14 @@ export function ViewerPanel(props: ViewerPanelProps) {
     onFrameIndexChange, onFrameIdChange,
     annotationRefreshKey = 0,
     selectedAnnotationCategoryId = null,
-    onAnnotationMutated
+    selectedAnnotationId = null,
+    onAnnotationMutated,
+    onAnnotationSelect,
+    onAnnotationUpdated,
+    hoveredAiId = null,
+    selectedAiId = null,
+    onAiDetectionSelect,
+    aiConfidenceThreshold = 0
   } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -243,6 +260,9 @@ export function ViewerPanel(props: ViewerPanelProps) {
                 categories={categories}
                 annotationTool={annotationTool}
                 annotationVisible={layerState.annotationVisible}
+                selectedAnnotationId={selectedAnnotationId}
+                onAnnotationSelect={onAnnotationSelect}
+                onAnnotationUpdated={onAnnotationUpdated}
               />
             )}
 
@@ -270,39 +290,52 @@ export function ViewerPanel(props: ViewerPanelProps) {
                   </svg>
                 )}
 
-                {layerState.aiShowBBox && aiOverlay.detections.map((detection) => (
-                  <div
-                    key={`ai-${detection.id}`}
-                    style={{
-                      position: "absolute",
-                      left: `${(detection.x / videoWidth) * 100}%`,
-                      top: `${(detection.y / videoHeight) * 100}%`,
-                      width: `${(detection.width / videoWidth) * 100}%`,
-                      height: `${(detection.height / videoHeight) * 100}%`,
-                      border: "2px solid #f59e0b",
-                      boxShadow: "0 0 0 1px rgba(0,0,0,0.5) inset"
-                    }}
-                  >
-                    {layerState.aiShowTrackId && detection.trackId !== null && (
+                {layerState.aiShowBBox && aiOverlay.detections
+                  .filter((d) => d.score >= aiConfidenceThreshold)
+                  .map((detection) => {
+                    const isHovered = detection.id === hoveredAiId;
+                    const isSelected = detection.id === selectedAiId;
+                    const highlight = isSelected || isHovered;
+                    return (
                       <div
+                        key={`ai-${detection.id}`}
+                        onClick={() => onAiDetectionSelect?.(isSelected ? null : detection.id)}
                         style={{
                           position: "absolute",
-                          top: -18,
-                          left: 0,
-                          padding: "1px 5px",
-                          borderRadius: 4,
-                          background: "rgba(245,158,11,0.9)",
-                          color: "#111",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          whiteSpace: "nowrap"
+                          left: `${(detection.x / videoWidth) * 100}%`,
+                          top: `${(detection.y / videoHeight) * 100}%`,
+                          width: `${(detection.width / videoWidth) * 100}%`,
+                          height: `${(detection.height / videoHeight) * 100}%`,
+                          border: highlight ? "2.5px solid #fff" : "2px solid #f59e0b",
+                          outline: highlight ? "1.5px solid #f59e0b" : undefined,
+                          background: isSelected ? "rgba(245,158,11,0.15)" : isHovered ? "rgba(245,158,11,0.08)" : undefined,
+                          boxShadow: highlight ? "0 0 6px rgba(245,158,11,0.6)" : "0 0 0 1px rgba(0,0,0,0.5) inset",
+                          pointerEvents: "auto",
+                          cursor: "pointer",
+                          transition: "border 0.1s, background 0.1s"
                         }}
                       >
-                        #{detection.trackId} {detection.categoryName} {Math.round(detection.score * 100)}%
+                        {layerState.aiShowTrackId && detection.trackId !== null && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: -18,
+                              left: 0,
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                              background: "rgba(245,158,11,0.9)",
+                              color: "#111",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            #{detection.trackId} {detection.categoryName} {Math.round(detection.score * 100)}%
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             )}
           </div>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Check, Eye, EyeOff, Info, Pentagon, Plus, RefreshCw, Square, Trash2, Type, X } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Info, Pentagon, Plus, RefreshCw, Square, Trash2, Type, X } from "lucide-react";
 import {
   createCategory,
   deleteAnnotation,
@@ -29,10 +29,25 @@ interface LayersPanelProps {
   annotationRefreshKey?: number;
   /** The category ID that will be used when the user draws a new annotation */
   selectedAnnotationCategoryId?: string | null;
+  /** Currently selected annotation (for highlighting) */
+  selectedAnnotationId?: string | null;
   /** Called when the user selects a category to use for new annotations */
   onAnnotationCategorySelect?: (id: string) => void;
   /** Called after annotation delete/visibility mutations (triggers ViewerPanel refresh) */
   onAnnotationMutated?: () => void;
+  /** Called when user clicks an annotation row */
+  onAnnotationSelect?: (id: string | null) => void;
+  /** Currently hovered AI detection (from canvas) */
+  hoveredAiId?: number | null;
+  /** Currently selected AI detection */
+  selectedAiId?: number | null;
+  onAiDetectionSelect?: (id: number | null) => void;
+  onAiDetectionHover?: (id: number | null) => void;
+  /** Confidence threshold 0-1 */
+  aiConfidenceThreshold?: number;
+  onAiConfidenceThresholdChange?: (v: number) => void;
+  /** Called when user wants to copy AI detection to manual annotation */
+  onAiCopyToManual?: (det: import("@/client/ai-overlay-stability").AiOverlayDetection) => void;
 }
 
 function sortCategories(categories: CategoryItem[]): CategoryItem[] {
@@ -75,8 +90,17 @@ export function LayersPanel(props: LayersPanelProps) {
     viewerFrameId,
     annotationRefreshKey = 0,
     selectedAnnotationCategoryId,
+    selectedAnnotationId = null,
     onAnnotationCategorySelect,
-    onAnnotationMutated
+    onAnnotationMutated,
+    onAnnotationSelect,
+    hoveredAiId = null,
+    selectedAiId = null,
+    onAiDetectionSelect,
+    onAiDetectionHover,
+    aiConfidenceThreshold = 0,
+    onAiConfidenceThresholdChange,
+    onAiCopyToManual
   } = props;
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -90,7 +114,7 @@ export function LayersPanel(props: LayersPanelProps) {
   const [infoOpenId, setInfoOpenId] = useState<string | null>(null);
 
   const aiOverlay = useAiOverlayData({ videoId, aiStatus, aiUpdatedAt, currentDisplayIndex });
-  const aiCurrentDetections = aiOverlay.detections;
+  const aiCurrentDetections = aiOverlay.detections.filter(d => d.score >= aiConfidenceThreshold);
 
   // Per-frame annotations — shares refreshKey with ViewerPanel
   const frameAnnotations = useFrameAnnotations({
@@ -99,6 +123,15 @@ export function LayersPanel(props: LayersPanelProps) {
     enabled: Boolean(videoId && viewerFrameId),
     refreshKey: annotationRefreshKey
   });
+
+  const annotationRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Scroll selected annotation row into view
+  useEffect(() => {
+    if (!selectedAnnotationId) return;
+    const el = annotationRowRefs.current.get(selectedAnnotationId);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedAnnotationId]);
 
   const loadCategories = useCallback(async () => {
     if (!videoId) { setCategories([]); return; }
@@ -431,16 +464,25 @@ export function LayersPanel(props: LayersPanelProps) {
               const isInfoOpen = infoOpenId === item.id;
               const isConfirming = deleteConfirmId === item.id;
               const rowBusy = busyKey === `delete-annotation-${item.id}` || busyKey === `ann-visible-${item.id}` || busyKey === `update-annotation-${item.id}`;
+              const isSelected = item.id === selectedAnnotationId;
 
               return (
                 <div key={item.id}>
                   <div
+                    ref={(el) => {
+                      if (el) annotationRowRefs.current.set(item.id, el);
+                      else annotationRowRefs.current.delete(item.id);
+                    }}
+                    onClick={() => onAnnotationSelect?.(isSelected ? null : item.id)}
                     style={{
                       display: "flex", alignItems: "center", height: 34, gap: 5, padding: "0 6px",
                       borderRadius: isInfoOpen ? "6px 6px 0 0" : 6,
-                      border: `1px solid ${isInfoOpen ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
-                      background: "#171824",
-                      opacity: item.isVisible ? 1 : 0.5
+                      border: isSelected
+                        ? `1.5px solid ${cat?.color ?? "#4f8cff"}`
+                        : `1px solid ${isInfoOpen ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
+                      background: isSelected ? "rgba(79,140,255,0.12)" : "#171824",
+                      opacity: item.isVisible ? 1 : 0.5,
+                      cursor: "pointer"
                     }}
                   >
                     {/* Type icon */}
@@ -458,6 +500,7 @@ export function LayersPanel(props: LayersPanelProps) {
                       <select
                         value={item.categoryId}
                         onChange={(e) => void handleInlineCategoryChange(item, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         disabled={!videoId || rowBusy}
                         style={{
                           flex: 1, minWidth: 0, background: "transparent", border: "none",
@@ -472,7 +515,7 @@ export function LayersPanel(props: LayersPanelProps) {
                     {/* Info toggle */}
                     <button
                       type="button"
-                      onClick={() => setInfoOpenId(isInfoOpen ? null : item.id)}
+                      onClick={(e) => { e.stopPropagation(); setInfoOpenId(isInfoOpen ? null : item.id); }}
                       style={iconBtnStyle(isInfoOpen)}
                       title="詳細資訊"
                     >
@@ -482,7 +525,7 @@ export function LayersPanel(props: LayersPanelProps) {
                     {/* Eye toggle (persisted to server) */}
                     <button
                       type="button"
-                      onClick={() => void handleToggleAnnotationVisible(item)}
+                      onClick={(e) => { e.stopPropagation(); void handleToggleAnnotationVisible(item); }}
                       disabled={rowBusy}
                       style={iconBtnStyle(item.isVisible)}
                       title={item.isVisible ? "隱藏標註" : "顯示標註"}
@@ -494,17 +537,17 @@ export function LayersPanel(props: LayersPanelProps) {
                     {isConfirming ? (
                       <>
                         <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "nowrap" }}>刪除？</span>
-                        <button type="button" onClick={() => void handleDeleteAnnotation(item.id)} disabled={rowBusy} style={iconBtnStyle(false, "danger")} title="確認刪除">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); void handleDeleteAnnotation(item.id); }} disabled={rowBusy} style={iconBtnStyle(false, "danger")} title="確認刪除">
                           <Check size={12} />
                         </button>
-                        <button type="button" onClick={() => setDeleteConfirmId(null)} style={iconBtnStyle(false)} title="取消">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} style={iconBtnStyle(false)} title="取消">
                           <X size={12} />
                         </button>
                       </>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setDeleteConfirmId(item.id)}
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }}
                         style={iconBtnStyle(false, "danger")}
                         title="刪除標註"
                       >
@@ -582,6 +625,25 @@ export function LayersPanel(props: LayersPanelProps) {
             ))}
           </div>
 
+          {/* Confidence threshold slider */}
+          {aiOverlay.hasData && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: "#7880a0", flexShrink: 0 }}>信心度</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(aiConfidenceThreshold * 100)}
+                onChange={(e) => onAiConfidenceThresholdChange?.(Number(e.target.value) / 100)}
+                style={{ flex: 1, accentColor: "#f59e0b", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: 11, color: "#c8cae8", fontVariantNumeric: "tabular-nums", width: 30, textAlign: "right" }}>
+                {Math.round(aiConfidenceThreshold * 100)}%
+              </span>
+            </div>
+          )}
+
           {/* AI detection rows */}
           {aiOverlay.loading && (
             <div style={{ fontSize: 11, color: "#7880a0", padding: "8px 0", textAlign: "center" }}>載入中…</div>
@@ -594,29 +656,62 @@ export function LayersPanel(props: LayersPanelProps) {
           )}
           {!aiOverlay.loading && aiCurrentDetections.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 8 }}>
-              {aiCurrentDetections.map((det, idx) => (
-                <div
-                  key={det.id}
-                  style={{
-                    display: "flex", alignItems: "center", height: 30, gap: 6,
-                    padding: "0 8px",
-                    borderRadius: 5,
-                    border: "1px solid #3c3e58",
-                    background: "#171824",
-                    fontVariantNumeric: "tabular-nums"
-                  }}
-                >
-                  <span style={{ fontSize: 10, color: "#7880a0", width: 32, flexShrink: 0, textAlign: "right" }}>
-                    {det.trackId !== null ? `#${det.trackId}` : `${idx + 1}`}
-                  </span>
-                  <span style={{ fontSize: 11, color: "#d4d6f0", flex: "0 0 auto", minWidth: 40 }}>
-                    {det.categoryName}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#9699b0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    [{Math.round(det.x)}, {Math.round(det.y)}, {Math.round(det.width)}, {Math.round(det.height)}]
-                  </span>
-                </div>
-              ))}
+              {aiCurrentDetections.map((det, idx) => {
+                const isHovered = det.id === hoveredAiId;
+                const isSelected = det.id === selectedAiId;
+                const highlight = isSelected || isHovered;
+                return (
+                  <div
+                    key={det.id}
+                    onClick={() => onAiDetectionSelect?.(isSelected ? null : det.id)}
+                    onMouseEnter={() => onAiDetectionHover?.(det.id)}
+                    onMouseLeave={() => onAiDetectionHover?.(null)}
+                    style={{
+                      display: "flex", alignItems: "center", height: 30, gap: 6,
+                      padding: "0 8px",
+                      borderRadius: 5,
+                      border: isSelected
+                        ? "1.5px solid #f59e0b"
+                        : isHovered
+                        ? "1px solid rgba(245,158,11,0.6)"
+                        : "1px solid #3c3e58",
+                      background: isSelected ? "rgba(245,158,11,0.12)" : isHovered ? "rgba(245,158,11,0.05)" : "#171824",
+                      fontVariantNumeric: "tabular-nums",
+                      cursor: "pointer",
+                      transition: "border 0.1s, background 0.1s"
+                    }}
+                  >
+                    <span style={{ fontSize: 10, color: highlight ? "#f59e0b" : "#7880a0", width: 32, flexShrink: 0, textAlign: "right" }}>
+                      {det.trackId !== null ? `#${det.trackId}` : `${idx + 1}`}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#d4d6f0", flex: "0 0 auto", minWidth: 40 }}>
+                      {det.categoryName}
+                    </span>
+                    <span style={{ fontSize: 10, color: "#9699b0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      [{Math.round(det.x)}, {Math.round(det.y)}, {Math.round(det.width)}, {Math.round(det.height)}]
+                    </span>
+                    <span style={{ fontSize: 10, color: "#7880a0", flexShrink: 0 }}>
+                      {Math.round(det.score * 100)}%
+                    </span>
+                    {onAiCopyToManual && viewerFrameId && (
+                      <button
+                        title="複製為手動標注"
+                        onClick={(e) => { e.stopPropagation(); onAiCopyToManual(det); }}
+                        style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 18, height: 18, borderRadius: 3, border: "none",
+                          background: "transparent", color: "#7880a0", cursor: "pointer", flexShrink: 0,
+                          padding: 0
+                        }}
+                        onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f59e0b"; }}
+                        onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#7880a0"; }}
+                      >
+                        <Copy size={11} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

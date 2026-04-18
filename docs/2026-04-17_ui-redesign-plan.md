@@ -53,58 +53,58 @@
 
 ### Phase 1：基礎設施
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 1-1 | 安裝 Tailwind CSS | `npx @tailwindcss/cli init`，設定 `content` 掃描路徑，移除現有 inline style 的基底 |
-| 1-2 | 安裝 shadcn/ui | `npx shadcn@latest init`，選用 `zinc` 色系 + dark mode |
-| 1-3 | 安裝 Lucide React | `npm i lucide-react`，提供全套 icon |
-| 1-4 | 安裝 react-resizable-panels | `npm i react-resizable-panels`，實現可拖曳三欄佈局 |
-| 1-5 | 建立 CSS 變數 / Design Token | 在 `globals.css` 定義色彩、間距、圓角等變數 |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 1-1 | ✅ | 安裝 Tailwind CSS | `npx @tailwindcss/cli init`，設定 `content` 掃描路徑，移除現有 inline style 的基底 |
+| 1-2 | ✅ | 安裝 shadcn/ui | `npx shadcn@latest init`，選用 `zinc` 色系 + dark mode |
+| 1-3 | ✅ | 安裝 Lucide React | `npm i lucide-react`，提供全套 icon |
+| 1-4 | ✅ | 安裝 react-resizable-panels | `npm i react-resizable-panels`，實現可拖曳三欄佈局 |
+| 1-5 | ✅ | 建立 CSS 變數 / Design Token | 在 `globals.css` 定義色彩、間距、圓角等變數 |
 
 ### Phase 2：全螢幕三欄佈局
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 2-1 | 改造 `HomeScreen.tsx` | 替換現有 grid 佈局為 `PanelGroup` + `Panel` + `PanelResizeHandle` 三欄結構 |
-| 2-2 | 建立 `TopBar` 元件 | 新增頂部工具列，整合 logo、上傳按鈕、AI 操作、設定選單 |
-| 2-3 | 建立 `StatusBar` 元件 | 新增底部狀態列，顯示影片 metadata 摘要（一行） |
-| 2-4 | 左側欄：影片列表 | 將 `VideosListPanel` 移入左側 Panel |
-| 2-5 | 右側欄：圖層面板 | 將 `LayersPanel` 移入右側 Panel |
-| 2-6 | 中央畫布 | `ViewerPanel` 佔據中央，`flex:1` 自適應寬度 |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 2-1 | ✅ | 改造 `HomeScreen.tsx` | 替換現有 grid 佈局為 `PanelGroup` + `Panel` + `PanelResizeHandle` 三欄結構 |
+| 2-2 | ✅ | 建立 `TopBar` 元件 | 新增頂部工具列，整合 logo、上傳按鈕、AI 操作、設定選單 |
+| 2-3 | ⬜ | 建立 `StatusBar` 元件 | 新增底部狀態列，顯示影片 metadata 摘要（一行） |
+| 2-4 | ✅ | 左側欄：影片列表 | 將 `VideosListPanel` 移入左側 Panel |
+| 2-5 | ✅ | 右側欄：圖層面板 | 將 `LayersPanel` 移入右側 Panel |
+| 2-6 | ✅ | 中央畫布 | `ViewerPanel` 佔據中央，`flex:1` 自適應寬度 |
 
 ### Phase 3：深色主題
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 3-1 | Tailwind dark mode 設定 | `darkMode: 'class'`，`<html class="dark">` 預設啟用 |
-| 3-2 | 定義深色色票 | 背景 `#1e1e2e`、側欄 `#252536`、面板 `#2a2a3d`、邊框 `#3a3a52`、文字 `#e4e4ef` |
-| 3-3 | 逐一替換元件色彩 | 將所有硬編碼色碼改為 Tailwind class（`bg-background`、`text-foreground` 等） |
-| 3-4 | 影片容器背景 | 維持純黑 `#09090b`，讓影像本身最突出 |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 3-1 | ✅ | Tailwind dark mode 設定 | `darkMode: 'class'`，`<html class="dark">` 預設啟用 |
+| 3-2 | ✅ | 定義深色色票 | 背景 `#0a0b14`、側欄 `#252638`、面板 `#171824`、邊框 `#3c3e58`、文字 `#d4d6f0` |
+| 3-3 | ✅ | 逐一替換元件色彩 | inline style 使用設計系統色票，所有元件套用統一深色主題 |
+| 3-4 | ✅ | 影片容器背景 | 維持純黑 `#000`，讓影像本身最突出 |
 
 ### Phase 4：Top Bar 與操作精簡
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 4-1 | 上傳操作收入 dropdown | shadcn `DropdownMenu`：建立上傳任務、取消上傳，附帶進度指示 |
-| 4-2 | AI 操作收入按鈕組 | 開始辨識 / 取消辨識 + 狀態 badge，從畫布浮動改為 Top Bar 固定位置 |
-| 4-3 | 破壞性操作收入設定選單 | 清除影片、清除 AI 結果、清除前端資料 → 放進 `⚙` dropdown，需二次確認 |
-| 4-4 | Icon 按鈕 + tooltip | 所有按鈕改用 Lucide icon + shadcn `Tooltip`，hover 顯示文字說明 |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 4-1 | ✅ | 上傳操作收入 dropdown | `UploadPanel` 浮動面板：建立上傳任務、進度條、取消上傳 |
+| 4-2 | ✅ | AI 操作收入按鈕組 | 開始辨識 / 取消辨識 + 狀態 badge，整合於 Top Bar |
+| 4-3 | ✅ | 破壞性操作收入設定選單 | 清除影片、清除 AI 結果 → TopBar dropdown，二次確認對話框 |
+| 4-4 | ✅ | Icon 按鈕 + tooltip | 所有按鈕改用 Lucide icon，hover 顯示 title 說明 |
 
 ### Phase 5：影片列表改進（左側欄）
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 5-1 | 卡片重設計 | 檔名（truncate）+ 狀態圓點（🟢🟡🔴）+ 時長，選中用左邊 3px accent 色帶 |
-| 5-2 | 搜尋 / 篩選 | 頂部加搜尋框，可依 AI 狀態篩選 |
-| 5-3 | 右鍵選單 | shadcn `ContextMenu`：刪除、重新辨識、查看詳情 |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 5-1 | ✅ | 卡片重設計 | 檔名（truncate）+ 狀態圓點 + 時長，選中用左邊 accent 色帶 |
+| 5-2 | ⬜ | 搜尋 / 篩選 | 頂部加搜尋框，可依 AI 狀態篩選 |
+| 5-3 | ⬜ | 右鍵選單 | `ContextMenu`：刪除、重新辨識、查看詳情 |
 
 ### Phase 6：圖層面板改進（右側欄）
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 6-1 | Tab 分組 | shadcn `Tabs`：Category / Annotation / AI 三個頁籤 |
-| 6-2 | 屬性面板 | 選中 bbox 後在右側欄底部顯示屬性（x/y/w/h、類別） |
-| 6-3 | 畫布拖曳建立標註 | 取代手動輸入 x/y/w/h 的方式（長期目標） |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 6-1 | ⬜ | Tab 分組 | `Tabs`：Category / Annotation / AI 三個頁籤 |
+| 6-2 | ✅ | 屬性面板 | 選中 annotation 後列展開屬性，畫布顯示 resize 把手 |
+| 6-3 | ✅ | 畫布拖曳建立標註 | `useAnnotationTool` — RECT/POLYGON/TEXT 模式，拖曳建立 |
 
 #### 6-A. AI Layers 列表行設計（唯讀）
 
@@ -132,10 +132,10 @@ AI 結果來自 `latest.coco.json`，為唯讀資料，**不提供 delete**。
 
 互動規則：
 
-1. hover 列表項 → 畫布對應 bbox 高亮（加粗 + 半透明填色）
-2. click 列表項 → 選中狀態，右側欄底部可顯示完整屬性
-3. click 畫布 bbox → 列表自動捲動並選中對應項
-4. Confidence slider → 即時過濾低於門檻的 bbox
+1. ✅ hover 列表項 → 畫布對應 bbox 高亮（白色外框 + 橘色陰影）
+2. ✅ click 列表項 → 選中狀態（橘色邊框 + 淡色背景），雙向同步
+3. ✅ click 畫布 bbox → 列表自動捲動並選中對應項
+4. ✅ Confidence slider → 即時過濾低於門檻的 bbox（list + canvas 同步）
 
 #### 6-B. Annotation Layers 列表行設計（完整 CRUD）
 
@@ -157,26 +157,26 @@ AI 結果來自 `latest.coco.json`，為唯讀資料，**不提供 delete**。
 
 互動規則：
 
-1. hover / click 聯動與 AI Layers 相同
-2. 編輯模式下 bbox 四角出現 resize 把手，可拖曳調整
-3. 新增標註：點擊「新增」→ 畫布游標變十字線 → 拖曳矩形 → 選擇類別
+1. ✅ hover / click 聯動：列表列選中 ↔ 畫布高亮雙向同步
+2. ✅ 編輯模式：bbox 8 個 resize 把手 + 拖曳移動，polygon 頂點拖曳
+3. ✅ 新增標註：工具列選 RECT/POLYGON/TEXT → 畫布拖曳建立 → 自動儲存
 
 ### Phase 7：播放控制列改進
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 7-1 | Icon 化控制按鈕 | 播放/暫停/上一幀/下一幀 改用 SVG icon |
-| 7-2 | Timeline scrubber 美化 | 自訂 range slider 樣式，加上已播放區段填色 |
-| 7-3 | 倍速選擇 popover | shadcn `Popover` 或 `Select`，取代原生 `<select>` |
-| 7-4 | Metadata 收起 | 移至 Status Bar 一行顯示，或 `ℹ` 按鈕觸發 popover |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 7-1 | ✅ | Icon 化控制按鈕 | 播放/暫停/上一幀/下一幀 使用 Lucide icon |
+| 7-2 | ⬜ | Timeline scrubber 美化 | 自訂 range slider 樣式，加上已播放區段填色 |
+| 7-3 | ✅ | 倍速選擇 | 原生 `<select>` 已整合於播放列 |
+| 7-4 | ⬜ | Metadata 收起 | 移至 StatusBar 一行顯示（待 2-3 完成後處理） |
 
 ### Phase 8：影像工具列改進
 
-| # | 項目 | 方法 |
-|---|------|------|
-| 8-1 | 工具列移至畫布上方 | 精簡為一行：Zoom 按鈕組 + Fit + Grid/Measure toggle |
-| 8-2 | Contrast/Brightness | 改為 popover 內的 slider，平時隱藏 |
-| 8-3 | 快捷鍵支援 | `+/-` 縮放、`F` fit、`G` grid toggle |
+| # | 狀態 | 項目 | 方法 |
+|---|------|------|------|
+| 8-1 | ✅ | 工具列移至畫布上方 | `ViewerImageToolbar`：Zoom 按鈕組 + Fit + 標注工具（RECT/POLYGON/TEXT/SELECT） |
+| 8-2 | ✅ | Contrast/Brightness | slider 整合於工具列，即時調整 |
+| 8-3 | ⬜ | 快捷鍵支援 | `+/-` 縮放、`F` fit、工具切換快捷鍵 |
 
 ---
 
@@ -207,3 +207,20 @@ Phase 5–8 (各面板細節，可平行進行)
 ```
 
 Phase 1–3 完成後，整體觀感會有本質性的改變。Phase 4–8 屬於漸進式細節打磨。
+
+---
+
+## 實作進度摘要（2026-04-18）
+
+| Phase | 完成度 | 待辦 |
+|-------|--------|------|
+| Phase 1 基礎設施 | ✅ 100% | — |
+| Phase 2 三欄佈局 | 🔄 83% | 2-3 StatusBar |
+| Phase 3 深色主題 | ✅ 100% | — |
+| Phase 4 Top Bar | ✅ 100% | — |
+| Phase 5 影片列表 | 🔄 33% | 5-2 搜尋篩選、5-3 右鍵選單 |
+| Phase 6 圖層面板 | 🔄 90% | 6-1 Tab 分組 |
+| Phase 7 播放控制 | 🔄 50% | 7-2 scrubber 美化、7-4 Metadata |
+| Phase 8 影像工具列 | 🔄 67% | 8-3 快捷鍵 |
+
+**建議下一步：** 2-3 StatusBar → 6-1 Tab 分組 → 5-3 右鍵選單

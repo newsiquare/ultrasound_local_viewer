@@ -11,6 +11,7 @@ import {
   AiResultData,
   AiStatusData,
   AnnotationItem,
+  AnnotationGeometry,
   ApiErrorPayload,
   ApiOkPayload,
   BootstrapData,
@@ -514,6 +515,7 @@ export async function updateAnnotation(
   payload: {
     categoryId?: string;
     isVisible?: boolean;
+    geometry?: AnnotationGeometry;
   }
 ): Promise<AnnotationItem> {
   const response = await fetch(`/api/videos/${videoId}/annotations/${annotationId}`, {

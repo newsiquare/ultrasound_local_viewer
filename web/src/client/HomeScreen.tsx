@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Group as PanelGroup, Panel, Separator as PanelSeparator } from "react-resizable-panels";
 
-import { clearAiResult, deleteVideo, fetchVideosList } from "@/client/api";
+import { clearAiResult, createAnnotation, deleteVideo, fetchVideosList, updateAnnotation } from "@/client/api";
 import { LayersPanel } from "@/client/components/LayersPanel";
-import { AiStatus } from "@/client/types";
+import { AiStatus, AnnotationGeometry } from "@/client/types";
+import { AiOverlayDetection } from "@/client/ai-overlay-stability";
 import { TopBar } from "@/client/components/TopBar";
 import { ViewerPanel } from "@/client/components/ViewerPanel";
 import { VideosListPanel } from "@/client/components/VideosListPanel";
@@ -24,10 +25,53 @@ export function HomeScreen() {
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [annotationRefreshKey, setAnnotationRefreshKey] = useState(0);
   const [selectedAnnotationCategoryId, setSelectedAnnotationCategoryId] = useState<string | null>(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [hoveredAiId, setHoveredAiId] = useState<number | null>(null);
+  const [selectedAiId, setSelectedAiId] = useState<number | null>(null);
+  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState(0);
 
   const onAnnotationMutated = useCallback(() => {
     setAnnotationRefreshKey((k) => k + 1);
   }, []);
+
+  const handleAnnotationUpdated = useCallback(
+    async (annotationId: string, geometry: AnnotationGeometry) => {
+      const videoId = viewerSession.currentVideoId;
+      if (!videoId) return;
+      try {
+        await updateAnnotation(videoId, annotationId, { geometry });
+        onAnnotationMutated();
+      } catch {
+        // silent — canvas will snap back on next refresh
+      }
+    },
+    [viewerSession.currentVideoId, onAnnotationMutated]
+  );
+
+  const handleAiCopyToManual = useCallback(
+    async (det: AiOverlayDetection) => {
+      const videoId = viewerSession.currentVideoId;
+      const frameId = currentFrameId;
+      if (!videoId || !frameId || !viewerSession.bootstrapData) return;
+      const cats = viewerSession.bootstrapData.categories;
+      const matched = cats.find(
+        (c) => c.name.toLowerCase() === det.categoryName.toLowerCase()
+      ) ?? cats[0];
+      if (!matched) return;
+      try {
+        await createAnnotation(videoId, {
+          frameId,
+          categoryId: matched.id,
+          annotationType: "BBOX",
+          geometry: { type: "bbox", x: det.x, y: det.y, width: det.width, height: det.height }
+        });
+        onAnnotationMutated();
+      } catch {
+        // silent
+      }
+    },
+    [viewerSession.currentVideoId, viewerSession.bootstrapData, currentFrameId, onAnnotationMutated]
+  );
 
   const loadVideos = useCallback(async () => {
     setIsVideosLoading(true);
@@ -131,7 +175,14 @@ export function HomeScreen() {
                 onFrameIdChange={setCurrentFrameId}
                 annotationRefreshKey={annotationRefreshKey}
                 selectedAnnotationCategoryId={selectedAnnotationCategoryId}
+                selectedAnnotationId={selectedAnnotationId}
                 onAnnotationMutated={onAnnotationMutated}
+                onAnnotationSelect={setSelectedAnnotationId}
+                onAnnotationUpdated={handleAnnotationUpdated}
+                hoveredAiId={hoveredAiId}
+                selectedAiId={selectedAiId}
+                onAiDetectionSelect={setSelectedAiId}
+                aiConfidenceThreshold={aiConfidenceThreshold}
               />
             </div>
           </Panel>
@@ -160,8 +211,17 @@ export function HomeScreen() {
                 viewerFrameId={currentFrameId}
                 annotationRefreshKey={annotationRefreshKey}
                 selectedAnnotationCategoryId={selectedAnnotationCategoryId}
+                selectedAnnotationId={selectedAnnotationId}
                 onAnnotationCategorySelect={setSelectedAnnotationCategoryId}
                 onAnnotationMutated={onAnnotationMutated}
+                onAnnotationSelect={setSelectedAnnotationId}
+                hoveredAiId={hoveredAiId}
+                selectedAiId={selectedAiId}
+                onAiDetectionSelect={setSelectedAiId}
+                onAiDetectionHover={setHoveredAiId}
+                aiConfidenceThreshold={aiConfidenceThreshold}
+                onAiConfidenceThresholdChange={setAiConfidenceThreshold}
+                onAiCopyToManual={handleAiCopyToManual}
               />
             </div>
           </Panel>
