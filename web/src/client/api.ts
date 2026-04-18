@@ -668,3 +668,20 @@ export function uploadWithXhr(options: UploadWithXhrOptions): Promise<UploadResp
     xhr.send(formData);
   });
 }
+
+export type ExportFormat = "coco" | "coco-manual" | "yolo";
+
+/**
+ * Trigger a file download of exported annotations.
+ * Builds the export URL and opens it in the current tab so the browser
+ * handles the Content-Disposition: attachment response as a download.
+ */
+export function exportAnnotations(videoId: string, format: ExportFormat): void {
+  const url = `/api/videos/${videoId}/export?format=${encodeURIComponent(format)}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}

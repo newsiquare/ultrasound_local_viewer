@@ -2,8 +2,9 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { HelpCircle, Loader2, Settings, Trash2, Upload, X } from "lucide-react";
+import { Download, HelpCircle, Loader2, Settings, Trash2, Upload, X } from "lucide-react";
 
+import { exportAnnotations, ExportFormat } from "@/client/api";
 import { KeyboardShortcutsModal } from "@/client/components/KeyboardShortcutsModal";
 import { UploadTaskState } from "@/client/hooks/useUploadTask";
 
@@ -19,6 +20,7 @@ export function TopBar(props: TopBarProps) {
   const { uploadTask, currentVideoId, onDeleteCurrentVideo, onClearAiResult, onClearFrontendState } = props;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isClearingAi, setIsClearingAi] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -178,6 +180,67 @@ export function TopBar(props: TopBarProps) {
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
+
+      {/* Export dropdown — L2 */}
+      <div style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setExportOpen(!exportOpen)}
+          disabled={!currentVideoId}
+          style={btnStyle("ghost", !currentVideoId)}
+          title="匯出標註"
+        >
+          <Download size={15} />
+          匯出
+        </button>
+
+        {exportOpen && (
+          <>
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 40 }}
+              onClick={() => setExportOpen(false)}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                zIndex: 50,
+                background: "#171824",
+                border: "1px solid #3c3e58",
+                borderRadius: 8,
+                padding: "4px 0",
+                minWidth: 200,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)"
+              }}
+            >
+              <div style={{ padding: "4px 12px 6px", fontSize: 11, color: "#9699b0", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                匯出格式
+              </div>
+              {([
+                ["coco", "COCO JSON（全部）", "包含手動 + AI 標註"],
+                ["coco-manual", "COCO JSON（手動）", "僅手動標註"],
+                ["yolo", "YOLO TXT（手動 bbox）", "正規化座標格式"]
+              ] as [ExportFormat, string, string][]).map(([fmt, label, desc]) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => {
+                    if (currentVideoId) exportAnnotations(currentVideoId, fmt);
+                    setExportOpen(false);
+                  }}
+                  style={menuItemStyle("muted", false)}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <span style={{ fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontSize: 11, color: "#9699b0", marginTop: 1 }}>{desc}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Help button — L3 */}
       <button
