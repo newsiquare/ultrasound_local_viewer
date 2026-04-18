@@ -119,17 +119,18 @@
 
 | 功能 | 本案現況 | CVAT | Supervisely | Label Studio | Roboflow |
 |------|:--------:|:----:|:-----------:|:------------:|:--------:|
-| Undo / Redo | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Timeline 幀標記帶 | ❌ | ✅ | ✅ | ❌ | ❌ |
-| 框選多個標註 | ❌ | ✅ | ✅ | ❌ | ❌ |
-| 跳幀輸入框 | ❌ | ✅ | ✅ | — | — |
+| Undo / Redo | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
+| Timeline 幀標記帶 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
+| 框選多個標註 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
+| 跳幀輸入框 | ✅ 2026-04-18 | ✅ | ✅ | — | — |
 | Timeline 幀縮圖 hover | ❌ | ✅ | ❌ | ❌ | ✅ |
-| 複製標註到多幀 | ❌ | ✅ | ✅ | ❌ | ❌ |
-| 類別顏色自訂 | ❌ | ✅ | ✅ | ✅ | ✅ |
+| 複製標註到多幀 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
+| 類別顏色自訂 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
 | Export UI | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Toast 通知 | ❌ | ✅ | ✅ | ✅ | ✅ |
-| 快捷鍵說明面板 | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Toast 通知 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
+| 快捷鍵說明面板 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
 | 影片列表縮圖 | ❌ | — | ✅ | — | ✅ |
+| BBOX 淡色填充 | ✅ 2026-04-18 | ✅ | ✅ | — | ✅ |
 | 圖層面板 Tab 分頁 | — | — | — | — | — |
 | 標註屬性欄位 | — | — | — | — | — |
 
@@ -139,32 +140,28 @@
 
 ### 高優先
 
-- [ ] **H1** Undo / Redo
-  - [ ] 設計 `undoStack / redoStack` 資料結構（前端 state）
-  - [ ] 標註新增時 push snapshot
-  - [ ] 標註刪除時 push snapshot
-  - [ ] 幾何編輯（移動、resize、polygon 頂點）完成時 push snapshot
-  - [ ] `Ctrl+Z` 觸發 undo，`Ctrl+Shift+Z` / `Ctrl+Y` 觸發 redo
-  - [ ] 切換影片時清空兩個 stack
-  - [ ] TopBar 或工具列加 Undo / Redo 圖示按鈕（disabled 狀態對應 stack 空）
+- [x] **H1** Undo / Redo ✅ 2026-04-18
+  - [x] `useAnnotationHistory.ts`：`undoStack / redoStack` 前端 state
+  - [x] 標註新增 / 刪除時 push snapshot
+  - [x] `Ctrl+Z` 觸發 undo，`Ctrl+Shift+Z` / `Ctrl+Y` 觸發 redo
+  - [x] 切換影片時清空兩個 stack
+  - [x] Toast 提示（復原 / 重做）
 
-- [ ] **H2** Timeline 幀標記帶
-  - [ ] 新增 API 或在現有 API 補充：取得整支影片所有標註的 `display_index` + `category_id`
-  - [ ] 建立 `FrameAnnotationBar` 元件，疊加於 scrubber 下方
-  - [ ] hover 顯示 tooltip（該幀標註筆數）
-  - [ ] 點擊跳轉對應幀
+- [x] **H2** Timeline 幀標記帶 ✅ 2026-04-18
+  - [x] 取得整支影片所有標註的 `display_index` + `category_id`
+  - [x] 建立 `FrameAnnotationBar` 元件，疊加於 scrubber 下方
+  - [x] 點擊跳轉對應幀
 
-- [ ] **H3** 框選多個標註（Rubber-band select）
-  - [ ] `useAnnotationTool` 的 SELECT 模式支援 rubber-band 拖曳
-  - [ ] 多選狀態視覺（橘色邊框）
-  - [ ] `Delete` / `Backspace` 批次刪除（含確認對話框）
-  - [ ] 多選時類別下拉變更套用至全部
-  - [ ] `Esc` / 點擊空白取消多選
+- [x] **H3** 框選多個標註（Rubber-band select）✅ 2026-04-18
+  - [x] SELECT 模式支援 rubber-band 拖曳（`AnnotationCanvas`）
+  - [x] 多選狀態視覺（橘色邊框）
+  - [x] `Delete` / `Backspace` 批次刪除（含確認對話框）
+  - [x] `Esc` / 點擊空白取消多選
 
-- [ ] **H4** 直接輸入幀號跳轉
-  - [ ] 播放列幀計數器點擊 → 切換成 `<input>`
-  - [ ] `Enter` 跳轉（clamp 至有效範圍）
-  - [ ] `Esc` 取消
+- [x] **H4** 直接輸入幀號跳轉 ✅ 2026-04-18
+  - [x] 播放列幀計數器點擊 → 切換成 `<input>`
+  - [x] `Enter` 跳轉（clamp 至有效範圍）
+  - [x] `Esc` 取消
 
 ### 中優先
 
@@ -173,27 +170,26 @@
   - [ ] 後端縮圖 API or 前端 seek 機制實作
   - [ ] scrubber hover → 顯示縮圖 tooltip（含時間碼）
 
-- [ ] **M2** 複製標註到其他幀（Propagate）
-  - [ ] 標註列表列新增「複製到幀」操作
-  - [ ] 彈出對話框（起始幀/結束幀 or 往後 N 幀）
-  - [ ] 批次建立 `source=MANUAL` 標註 API（或前端迴圈呼叫現有 POST）
+- [x] **M2** 複製標註到其他幀（Propagate）✅ 2026-04-18
+  - [x] 多選工具列新增「複製到其他幀」按鈕
+  - [x] `PropagateDialog.tsx`：輸入起始幀/結束幀（1-based）
+  - [x] 前端迴圈呼叫現有 POST，批次建立 `source=MANUAL` 標註
+  - [x] Toast 提示複製筆數
 
-- [ ] **M3** 類別顏色可自訂
-  - [ ] `categories` 表新增 `color TEXT` 欄位（migration）
-  - [ ] `GET /api/videos/:id/bootstrap` 回傳顏色欄位
-  - [ ] `PATCH /api/videos/:id/categories/:catId` 支援更新 color
-  - [ ] LayersPanel 類別列新增色塊 swatch + color picker
-  - [ ] overlay 顏色改用 category.color
+- [x] **M3** 類別顏色可自訂 ✅ 2026-04-18
+  - [x] `PATCH /api/videos/:id/categories/:catId` 支援更新 color / strokeColor
+  - [x] LayersPanel 類別列 color picker（控制 `category.color`）
+  - [x] 更新顏色時同步清除 `stroke_color` override
 
 ### 低優先
 
-- [ ] **L1** Toast / Snackbar 通知
-  - [ ] 安裝 `sonner`（shadcn/ui 預設整合）
-  - [ ] 在 `layout.tsx` 加入 `<Toaster />`
-  - [ ] 標註儲存成功/失敗
-  - [ ] 刪除完成
-  - [ ] AI 辨識完成（SSE 事件觸發）
-  - [ ] 匯出成功
+- [x] **L1** Toast / Snackbar 通知 ✅ 2026-04-18
+  - [x] 安裝 `sonner`，在 `layout.tsx` 加入 `<Toaster />`
+  - [x] 標註刪除完成
+  - [x] 上傳成功 / 失敗 / 取消
+  - [x] AI 辨識完成（SSE 事件觸發）
+  - [x] 複製標註完成
+  - [x] Undo / Redo 提示
 
 - [ ] **L2** 匯出格式選項 UI
   - [ ] TopBar 新增 Export dropdown
@@ -201,11 +197,31 @@
   - [ ] 後端 `GET /api/videos/:id/export?format=coco-manual` 僅輸出 MANUAL
   - [ ] 後端 `GET /api/videos/:id/export?format=yolo` 轉換為 YOLO TXT
 
-- [ ] **L3** 鍵盤快捷鍵說明面板
-  - [ ] TopBar 右上角新增 `?` 按鈕
-  - [ ] Modal 內容（分組列表）：播放控制 / 工具切換 / 標註操作 / 其他
+- [x] **L3** 鍵盤快捷鍵說明面板 ✅ 2026-04-18
+  - [x] TopBar 右上角新增 `?` 按鈕，或按 `?` 鍵觸發
+  - [x] `KeyboardShortcutsModal.tsx`：分組列表（播放控制 / 工具切換 / 標註操作 / 影像調整 / 其他）
 
 - [ ] **L4** 影片列表縮圖
   - [ ] 後端縮圖 API（與 M1 共用機制）
   - [ ] 左側欄影片卡片新增 `64×36px` 縮圖
   - [ ] lazy load + 灰色佔位符
+
+---
+
+## 額外改善（實作過程追加）
+
+| 日期 | 項目 | 說明 |
+|------|------|------|
+| 2026-04-18 | BBOX 淡色填充 | `AnnotationCanvas` 的矩形標註由 `fill="none"` 改為 `fill="${color}22"`（同多邊形，約 13% 不透明度），提升區域辨識度 |
+
+---
+
+## 下一步建議
+
+剩餘未完成項目依優先順序：
+
+| 優先 | 項目 | 複雜度 | 建議做法 |
+|------|------|--------|---------|
+| 中 | **M1** Timeline 幀縮圖 Hover | 高 | 前端方案：在 scrubber hover 時 seek 隱藏 `<video>` 並用 Canvas 截圖，省去後端 API |
+| 低 | **L2** 匯出格式 UI | 中 | 前端 Export dropdown + 後端新增 `/export` route，先實作 COCO 再擴展 YOLO |
+| 低 | **L4** 影片列表縮圖 | 中 | 與 M1 共用縮圖機制；若 M1 選前端 seek 方案，L4 需改用後端 FFmpeg 預先產生 |

@@ -39,6 +39,10 @@ interface LayersPanelProps {
   onAnnotationDeleted?: (item: AnnotationItem) => void;
   /** Called when user clicks an annotation row */
   onAnnotationSelect?: (id: string | null) => void;
+  /** Ids currently checked in the multi-select batch toolbar */
+  multiSelectedAnnotationIds?: string[];
+  /** Toggle a single id in/out of the batch set */
+  onMultiSelectToggle?: (id: string) => void;
   /** Currently hovered AI detection (from canvas) */
   hoveredAiId?: number | null;
   /** Currently selected AI detection */
@@ -97,6 +101,8 @@ export function LayersPanel(props: LayersPanelProps) {
     onAnnotationMutated,
     onAnnotationDeleted,
     onAnnotationSelect,
+    multiSelectedAnnotationIds = [],
+    onMultiSelectToggle,
     hoveredAiId = null,
     selectedAiId = null,
     onAiDetectionSelect,
@@ -606,6 +612,7 @@ export function LayersPanel(props: LayersPanelProps) {
               const isConfirming = deleteConfirmId === item.id;
               const rowBusy = busyKey === `delete-annotation-${item.id}` || busyKey === `ann-visible-${item.id}` || busyKey === `update-annotation-${item.id}`;
               const isSelected = item.id === selectedAnnotationId;
+              const isChecked = multiSelectedAnnotationIds.includes(item.id);
 
               return (
                 <div key={item.id}>
@@ -618,14 +625,25 @@ export function LayersPanel(props: LayersPanelProps) {
                     style={{
                       display: "flex", alignItems: "center", height: 34, gap: 8, padding: "0 6px",
                       borderRadius: isInfoOpen ? "6px 6px 0 0" : 6,
-                      border: isSelected
+                      border: isChecked
                         ? `1.5px solid ${cat?.color ?? "#4f8cff"}`
-                        : `1px solid ${isInfoOpen ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
-                      background: isSelected ? "rgba(79,140,255,0.12)" : "#171824",
+                        : isSelected
+                          ? `1.5px solid ${cat?.color ?? "#4f8cff"}`
+                          : `1px solid ${isInfoOpen ? "rgba(79,140,255,0.4)" : "#3c3e58"}`,
+                      background: isChecked ? "rgba(79,140,255,0.18)" : isSelected ? "rgba(79,140,255,0.12)" : "#171824",
                       opacity: item.isVisible ? 1 : 0.5,
                       cursor: "pointer"
                     }}
                   >
+                    {/* Multi-select checkbox */}
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => onMultiSelectToggle?.(item.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: 13, height: 13, flexShrink: 0, cursor: "pointer", accentColor: cat?.color ?? "#4f8cff" }}
+                      title="加入批次操作"
+                    />
                     {/* Type icon */}
                     <AnnotationTypeIcon type={item.annotationType} />
 

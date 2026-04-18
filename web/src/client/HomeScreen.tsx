@@ -41,6 +41,18 @@ export function HomeScreen() {
     setAnnotationRefreshKey((k) => k + 1);
   }, []);
 
+  // single-select: only highlight on canvas, no effect on multi-select toolbar
+  const handleAnnotationSelect = useCallback((id: string | null) => {
+    setSelectedAnnotationId(id);
+  }, []);
+
+  // multi-select: toggle id in/out of the batch set (for checkbox in LayersPanel)
+  const handleMultiSelectToggle = useCallback((id: string) => {
+    setMultiSelectedAnnotationIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }, []);
+
   // H1: Undo/Redo history
   const history = useAnnotationHistory(onAnnotationMutated);
 
@@ -279,10 +291,7 @@ export function HomeScreen() {
                 selectedAnnotationCategoryId={selectedAnnotationCategoryId}
                 selectedAnnotationId={selectedAnnotationId}
                 onAnnotationMutated={onAnnotationMutated}
-                onAnnotationSelect={setSelectedAnnotationId}
-                onAnnotationUpdated={handleAnnotationUpdated}
-                onAnnotationCreated={handleAnnotationCreated}
-                canUndo={history.canUndo}
+                onAnnotationSelect={handleAnnotationSelect}
                 canRedo={history.canRedo}
                 onUndo={history.undo}
                 onRedo={history.redo}
@@ -326,7 +335,9 @@ export function HomeScreen() {
                 onAnnotationCategorySelect={setSelectedAnnotationCategoryId}
                 onAnnotationMutated={onAnnotationMutated}
                 onAnnotationDeleted={handleAnnotationDeleted}
-                onAnnotationSelect={setSelectedAnnotationId}
+                onAnnotationSelect={handleAnnotationSelect}
+                multiSelectedAnnotationIds={multiSelectedAnnotationIds}
+                onMultiSelectToggle={handleMultiSelectToggle}
                 hoveredAiId={hoveredAiId}
                 selectedAiId={selectedAiId}
                 onAiDetectionSelect={setSelectedAiId}

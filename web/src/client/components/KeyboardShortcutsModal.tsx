@@ -37,7 +37,7 @@ const SECTIONS = [
     shortcuts: [
       { keys: ["Ctrl / ⌘", "Z"], desc: "復原 (Undo)" },
       { keys: ["Ctrl / ⌘", "Shift", "Z"], desc: "重做 (Redo)" },
-      { keys: ["Ctrl / ⌘", "Y"], desc: "重做 (Redo)" },
+      { keys: ["Ctrl / ⌘", "Y"], desc: "重做 (Redo) 替代鍵" },
     ],
   },
   {
@@ -111,9 +111,9 @@ export function KeyboardShortcutsModal({ open, onClose }: KeyboardShortcutsModal
                 {section.title}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {section.shortcuts.map((shortcut) => (
+                {section.shortcuts.map((shortcut, i) => (
                   <div
-                    key={shortcut.desc}
+                    key={`${shortcut.desc}-${i}`}
                     style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
                     <div style={{ display: "flex", gap: 4, flexShrink: 0, width: 200 }}>
