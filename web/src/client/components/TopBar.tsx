@@ -1,9 +1,10 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Loader2, Settings, Trash2, Upload, X } from "lucide-react";
+import { HelpCircle, Loader2, Settings, Trash2, Upload, X } from "lucide-react";
 
+import { KeyboardShortcutsModal } from "@/client/components/KeyboardShortcutsModal";
 import { UploadTaskState } from "@/client/hooks/useUploadTask";
 
 interface TopBarProps {
@@ -20,6 +21,18 @@ export function TopBar(props: TopBarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isClearingAi, setIsClearingAi] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // L3: `?` global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (e.key === "?") setShortcutsOpen((prev) => !prev);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const onPickFile = () => {
     inputRef.current?.click();
@@ -166,6 +179,16 @@ export function TopBar(props: TopBarProps) {
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
+      {/* Help button — L3 */}
+      <button
+        type="button"
+        onClick={() => setShortcutsOpen(true)}
+        style={btnStyle("ghost", false)}
+        title="快捷鍵說明 (?)"
+      >
+        <HelpCircle size={15} />
+      </button>
+
       {/* Settings */}
       <div style={{ position: "relative" }}>
         <button
@@ -238,6 +261,8 @@ export function TopBar(props: TopBarProps) {
         onChange={(e) => void onChangeFile(e)}
         style={{ display: "none" }}
       />
+
+      <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </header>

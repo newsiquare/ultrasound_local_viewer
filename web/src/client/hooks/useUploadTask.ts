@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { uploadWithXhr } from "@/client/api";
 import { UploadNotification, UploadResponseData, UploadStatus } from "@/client/types";
@@ -57,15 +58,18 @@ export function useUploadTask(options: UseUploadTaskOptions): UploadTaskState {
         setStatus("READY");
         setProgressPercent(100);
         setNotification({ kind: "success", message: "Upload completed" });
+        toast.success("影片上傳成功");
         onUploadSuccess(payload.videoId);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           setStatus("CANCELED");
           setNotification({ kind: "info", message: "Upload canceled" });
+          toast.info("上傳已取消");
         } else {
           setStatus("FAILED");
           const message = error instanceof Error ? error.message : "Unknown upload error";
           setNotification({ kind: "error", message: `Upload failed: ${message}` });
+          toast.error(`上傳失敗：${message}`);
         }
       } finally {
         abortRef.current = null;

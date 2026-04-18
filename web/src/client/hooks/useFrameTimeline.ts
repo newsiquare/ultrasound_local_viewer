@@ -30,6 +30,7 @@ interface UseFrameTimelineResult {
   stepNextFrame: () => void;
   seekToStart: () => void;
   seekToEnd: () => void;
+  seekToDisplayIndex: (displayIndex: number) => void;
   startScrub: () => void;
   updateScrubTime: (nextTimeSec: number) => void;
   endScrub: () => Promise<void>;
@@ -359,6 +360,18 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
     seekToFrameIndex(framesRef.current.length - 1);
   }, [seekToFrameIndex]);
 
+  const seekToDisplayIndex = useCallback(
+    (displayIndex: number) => {
+      const idx = framesRef.current.findIndex((f) => f.displayIndex === displayIndex);
+      if (idx >= 0) {
+        seekToFrameIndex(idx);
+      } else {
+        seekToFrameIndex(clamp(displayIndex - 1, 0, framesRef.current.length - 1));
+      }
+    },
+    [seekToFrameIndex]
+  );
+
   const setPlaybackRate = useCallback(
     (nextRate: number) => {
       const safeRate = clamp(nextRate, 0.25, 4);
@@ -445,6 +458,7 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
       stepNextFrame,
       seekToStart,
       seekToEnd,
+      seekToDisplayIndex,
       startScrub,
       updateScrubTime,
       endScrub
@@ -469,6 +483,7 @@ export function useFrameTimeline(options: UseFrameTimelineOptions): UseFrameTime
       stepPrevFrame,
       seekToStart,
       seekToEnd,
+      seekToDisplayIndex,
       togglePlayPause,
       updateScrubTime,
       usesRequestVideoFrameCallback

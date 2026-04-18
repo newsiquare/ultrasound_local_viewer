@@ -35,6 +35,8 @@ interface LayersPanelProps {
   onAnnotationCategorySelect?: (id: string) => void;
   /** Called after annotation delete/visibility mutations (triggers ViewerPanel refresh) */
   onAnnotationMutated?: () => void;
+  /** Called with the full item after deletion — used by undo history */
+  onAnnotationDeleted?: (item: AnnotationItem) => void;
   /** Called when user clicks an annotation row */
   onAnnotationSelect?: (id: string | null) => void;
   /** Currently hovered AI detection (from canvas) */
@@ -93,6 +95,7 @@ export function LayersPanel(props: LayersPanelProps) {
     selectedAnnotationId = null,
     onAnnotationCategorySelect,
     onAnnotationMutated,
+    onAnnotationDeleted,
     onAnnotationSelect,
     hoveredAiId = null,
     selectedAiId = null,
@@ -193,6 +196,17 @@ export function LayersPanel(props: LayersPanelProps) {
     }
   }, [loadCategories, onReload, videoId]);
 
+  const handleUpdateCategoryColor = useCallback(async (category: CategoryItem, color: string) => {
+    if (!videoId) return;
+    try {
+      // Also clear stroke_color so it falls back to the new category.color
+      await updateCategory(videoId, category.id, { color, strokeColor: null });
+      await Promise.all([loadCategories(), onReload()]);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "更新類別顏色失敗");
+    }
+  }, [loadCategories, onReload, videoId]);
+
   const handleCreateCategory = useCallback(async () => {
     if (!videoId) return;
     setBusyKey("create-category");
@@ -245,14 +259,17 @@ export function LayersPanel(props: LayersPanelProps) {
     if (!videoId) return;
     setBusyKey(`delete-annotation-${annotationId}`);
     try {
+      // Capture item before deletion for undo history
+      const item = frameAnnotations.items.find((a) => a.id === annotationId);
       await deleteAnnotation(videoId, annotationId);
+      if (item) onAnnotationDeleted?.(item);
       onAnnotationMutated?.();
       setNotice("標註已刪除");
       setDeleteConfirmId(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "刪除標註失敗");
     } finally { setBusyKey(null); }
-  }, [onAnnotationMutated, videoId]);
+  }, [onAnnotationMutated, onAnnotationDeleted, videoId, frameAnnotations.items]);
 
   const activeCategory = categories.find((c) => c.id === selectedAnnotationCategoryId) ?? null;
 
@@ -483,14 +500,14 @@ export function LayersPanel(props: LayersPanelProps) {
                   />
                 </div>
 
-                {/* Stroke color picker */}
+                {/* Category color swatch — M3: controls the main category color */}
                 <input
                   type="color"
-                  value={effectiveStrokeColor}
-                  title="線框顏色"
+                  value={category.color}
+                  title="類別顏色"
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
-                    void handleUpdateCategoryStroke(category, { strokeColor: e.target.value });
+                    void handleUpdateCategoryColor(category, e.target.value);
                   }}
                   style={{
                     width: 20, height: 20, padding: 0, border: "none",

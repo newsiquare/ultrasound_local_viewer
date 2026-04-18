@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Group as PanelGroup, Panel, Separator as PanelSeparator } from "react-resizable-panels";
 
-import { clearAiResult, createAnnotation, deleteVideo, fetchVideosList, updateAnnotation } from "@/client/api";
+import { clearAiResult, createAnnotation, deleteAnnotation, deleteVideo, fetchAnnotationsAll, fetchVideosList, updateAnnotation } from "@/client/api";
 import { LayersPanel } from "@/client/components/LayersPanel";
 import { StatusBar } from "@/client/components/StatusBar";
-import { AiStatus, AnnotationGeometry } from "@/client/types";
+import { AiStatus, AnnotationGeometry, AnnotationItem } from "@/client/types";
 import { AiOverlayDetection } from "@/client/ai-overlay-stability";
 import { TopBar } from "@/client/components/TopBar";
 import { ViewerPanel } from "@/client/components/ViewerPanel";
 import { VideosListPanel } from "@/client/components/VideosListPanel";
+import { useAnnotationHistory } from "@/client/hooks/useAnnotationHistory";
 import { useUploadTask } from "@/client/hooks/useUploadTask";
 import { useLayerVisibilityState } from "@/client/hooks/useLayerVisibilityState";
 import { useViewerSessionState } from "@/client/hooks/useViewerSessionState";
@@ -30,21 +32,106 @@ export function HomeScreen() {
   const [hoveredAiId, setHoveredAiId] = useState<number | null>(null);
   const [selectedAiId, setSelectedAiId] = useState<number | null>(null);
   const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState(0);
+  // H3: multi-select
+  const [multiSelectedAnnotationIds, setMultiSelectedAnnotationIds] = useState<string[]>([]);
+  // H2: annotation frame marks (frameId → category colors)
+  const [annotationFrameMarks, setAnnotationFrameMarks] = useState<Map<string, string[]>>(new Map());
 
   const onAnnotationMutated = useCallback(() => {
     setAnnotationRefreshKey((k) => k + 1);
   }, []);
 
-  const handleAnnotationUpdated = useCallback(
-    async (annotationId: string, geometry: AnnotationGeometry) => {
+  // H1: Undo/Redo history
+  const history = useAnnotationHistory(onAnnotationMutated);
+
+  // H1: clear history when video changes
+  useEffect(() => {
+    history.clearHistory();
+    setMultiSelectedAnnotationIds([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerSession.currentVideoId]);
+
+  // H2: fetch frame marks whenever annotations change
+  const refreshFrameMarks = useCallback(async () => {
+    const videoId = viewerSession.currentVideoId;
+    const cats = viewerSession.bootstrapData?.categories ?? [];
+    if (!videoId || cats.length === 0) {
+      setAnnotationFrameMarks(new Map());
+      return;
+    }
+    try {
+      const items = await fetchAnnotationsAll(videoId, { source: "MANUAL" });
+      const catColorMap = new Map(cats.map((c) => [c.id, c.color]));
+      const marks = new Map<string, string[]>();
+      for (const item of items) {
+        const color = catColorMap.get(item.categoryId) ?? "#f59e0b";
+        const existing = marks.get(item.frameId);
+        if (existing) {
+          if (!existing.includes(color)) existing.push(color);
+        } else {
+          marks.set(item.frameId, [color]);
+        }
+      }
+      setAnnotationFrameMarks(marks);
+    } catch {
+      // silent — bar simply won't show
+    }
+  }, [viewerSession.currentVideoId, viewerSession.bootstrapData?.categories]);
+
+  useEffect(() => {
+    void refreshFrameMarks();
+  }, [refreshFrameMarks, annotationRefreshKey]);
+
+  // H1: annotation created callback
+  const handleAnnotationCreated = useCallback(
+    (item: AnnotationItem) => {
       const videoId = viewerSession.currentVideoId;
       if (!videoId) return;
+      history.pushCreate(videoId, item);
+    },
+    [viewerSession.currentVideoId, history]
+  );
+
+  // H1: annotation deleted callback (from LayersPanel)
+  const handleAnnotationDeleted = useCallback(
+    (item: AnnotationItem) => {
+      const videoId = viewerSession.currentVideoId;
+      if (!videoId) return;
+      history.pushDelete(videoId, item);
+    },
+    [viewerSession.currentVideoId, history]
+  );
+
+  const handleAnnotationUpdated = useCallback(
+    async (annotationId: string, geometry: AnnotationGeometry, oldGeometry?: AnnotationGeometry) => {
+      const videoId = viewerSession.currentVideoId;
+      if (!videoId) return;
+      if (oldGeometry) {
+        history.pushUpdate(videoId, annotationId, oldGeometry, geometry);
+      }
       try {
         await updateAnnotation(videoId, annotationId, { geometry });
         onAnnotationMutated();
       } catch {
-        // silent — canvas will snap back on next refresh
+        // silent — canvas snaps back on next refresh
       }
+    },
+    [viewerSession.currentVideoId, onAnnotationMutated, history]
+  );
+
+  // H3: batch delete
+  const handleBatchDeleteAnnotations = useCallback(
+    async (ids: string[]) => {
+      const videoId = viewerSession.currentVideoId;
+      if (!videoId || ids.length === 0) return;
+      for (const id of ids) {
+        try {
+          await deleteAnnotation(videoId, id);
+        } catch { /* skip failed */ }
+      }
+      setMultiSelectedAnnotationIds([]);
+      onAnnotationMutated();
+      toast.success(`已刪除 ${ids.length} 筆標註`);
     },
     [viewerSession.currentVideoId, onAnnotationMutated]
   );
@@ -194,6 +281,15 @@ export function HomeScreen() {
                 onAnnotationMutated={onAnnotationMutated}
                 onAnnotationSelect={setSelectedAnnotationId}
                 onAnnotationUpdated={handleAnnotationUpdated}
+                onAnnotationCreated={handleAnnotationCreated}
+                canUndo={history.canUndo}
+                canRedo={history.canRedo}
+                onUndo={history.undo}
+                onRedo={history.redo}
+                multiSelectedAnnotationIds={multiSelectedAnnotationIds}
+                onMultiSelect={setMultiSelectedAnnotationIds}
+                onBatchDeleteAnnotations={handleBatchDeleteAnnotations}
+                annotationFrameMarks={annotationFrameMarks}
                 hoveredAiId={hoveredAiId}
                 selectedAiId={selectedAiId}
                 onAiDetectionSelect={setSelectedAiId}
@@ -229,6 +325,7 @@ export function HomeScreen() {
                 selectedAnnotationId={selectedAnnotationId}
                 onAnnotationCategorySelect={setSelectedAnnotationCategoryId}
                 onAnnotationMutated={onAnnotationMutated}
+                onAnnotationDeleted={handleAnnotationDeleted}
                 onAnnotationSelect={setSelectedAnnotationId}
                 hoveredAiId={hoveredAiId}
                 selectedAiId={selectedAiId}

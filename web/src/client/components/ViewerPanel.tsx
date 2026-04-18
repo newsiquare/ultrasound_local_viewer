@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { ChevronFirst, ChevronLast, HardDriveDownload, Pause, Play, RefreshCw, SkipBack, SkipForward } from "lucide-react";
 
+import { createAnnotation } from "@/client/api";
 import { AnnotationCanvas } from "@/client/components/AnnotationCanvas";
+import { FrameAnnotationBar } from "@/client/components/FrameAnnotationBar";
+import { PropagateDialog } from "@/client/components/PropagateDialog";
 import { ViewerAiActionDock } from "@/client/components/ViewerAiActionDock";
 import { ViewerImageToolbar } from "@/client/components/ViewerImageToolbar";
 import { useAiOverlayData } from "@/client/hooks/useAiOverlayData";
@@ -30,7 +34,20 @@ interface ViewerPanelProps {
   selectedAnnotationId?: string | null;
   onAnnotationMutated?: () => void;
   onAnnotationSelect?: (id: string | null) => void;
-  onAnnotationUpdated?: (id: string, geometry: import("@/client/types").AnnotationGeometry) => void;
+  onAnnotationUpdated?: (id: string, geometry: import("@/client/types").AnnotationGeometry, oldGeometry?: import("@/client/types").AnnotationGeometry) => void;
+  /** Called with the full item after annotation creation — for undo history */
+  onAnnotationCreated?: (item: AnnotationItem) => void;
+  /** Undo/Redo */
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  /** Multi-select (rubber-band) */
+  multiSelectedAnnotationIds?: string[];
+  onMultiSelect?: (ids: string[]) => void;
+  onBatchDeleteAnnotations?: (ids: string[]) => void;
+  /** Annotation frame marks for the timeline bar: frameId → category colors */
+  annotationFrameMarks?: Map<string, string[]>;
   /** AI detection id being hovered in LayersPanel */
   hoveredAiId?: number | null;
   /** AI detection id selected in LayersPanel */
@@ -62,6 +79,15 @@ export function ViewerPanel(props: ViewerPanelProps) {
     onAnnotationMutated,
     onAnnotationSelect,
     onAnnotationUpdated,
+    onAnnotationCreated,
+    canUndo = false,
+    canRedo = false,
+    onUndo,
+    onRedo,
+    multiSelectedAnnotationIds = [],
+    onMultiSelect,
+    onBatchDeleteAnnotations,
+    annotationFrameMarks = new Map(),
     hoveredAiId = null,
     selectedAiId = null,
     onAiDetectionSelect,
@@ -72,11 +98,43 @@ export function ViewerPanel(props: ViewerPanelProps) {
   const imageTools = useViewerImageTools(currentVideoId);
   const timeline = useFrameTimeline({ videoId: currentVideoId, videoRef });
 
+  // H4: frame-jump input state
+  const [frameInputActive, setFrameInputActive] = useState(false);
+  const [frameInputValue, setFrameInputValue] = useState("");
+  // M2: propagate dialog state
+  const [propagateOpen, setPropagateOpen] = useState(false);
+
+  // M2: batch-copy selected annotations to a range of frames
+  const handlePropagate = useCallback(async (items: AnnotationItem[], fromIndex: number, toIndex: number) => {
+    if (!currentVideoId) return;
+    const frames = timeline.frames;
+    const targetFrames = frames.filter(
+      (f) => f.displayIndex >= fromIndex && f.displayIndex <= toIndex
+    );
+    let copied = 0;
+    for (const frame of targetFrames) {
+      for (const item of items) {
+        if (!item.geometry) continue;
+        await createAnnotation(currentVideoId, {
+          frameId: frame.frameId,
+          categoryId: item.categoryId,
+          annotationType: item.annotationType,
+          geometry: item.geometry as unknown as Record<string, unknown>,
+          textContent: item.textContent ?? undefined,
+        });
+        copied++;
+      }
+    }
+    onAnnotationMutated?.();
+    toast.success(`已複製 ${copied} 筆標註`);
+  }, [currentVideoId, timeline.frames, onAnnotationMutated]);
+
   const annotationTool = useAnnotationTool({
     videoId: currentVideoId,
     frameId: timeline.currentFrame?.frameId ?? null,
     selectedCategoryId: selectedAnnotationCategoryId,
-    onCreated: onAnnotationMutated
+    onCreated: onAnnotationMutated,
+    onCreatedWithItem: onAnnotationCreated,
   });
 
   const durationFromMeta = bootstrapData?.meta.duration_sec ?? 0;
@@ -98,6 +156,22 @@ export function ViewerPanel(props: ViewerPanelProps) {
     // Ignore when typing in an input/textarea/contenteditable
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+    // H1: Undo / Redo
+    if ((e.metaKey || e.ctrlKey) && !e.altKey) {
+      if (e.key === "z" || e.key === "Z") {
+        if (e.shiftKey) {
+          if (canRedo) { e.preventDefault(); void onRedo?.(); toast("重做", { duration: 1200 }); }
+        } else {
+          if (canUndo) { e.preventDefault(); void onUndo?.(); toast("復原", { duration: 1200 }); }
+        }
+        return;
+      }
+      if ((e.key === "y" || e.key === "Y") && !e.shiftKey) {
+        if (canRedo) { e.preventDefault(); void onRedo?.(); toast("重做", { duration: 1200 }); }
+        return;
+      }
+    }
 
     switch (e.key) {
       case "+": case "=":
@@ -130,6 +204,13 @@ export function ViewerPanel(props: ViewerPanelProps) {
         break;
       case "Escape":
         annotationTool.setActiveTool(null);
+        if (multiSelectedAnnotationIds.length > 0) onMultiSelect?.([]);
+        break;
+      case "Delete": case "Backspace":
+        if (multiSelectedAnnotationIds.length > 0) {
+          e.preventDefault();
+          onBatchDeleteAnnotations?.(multiSelectedAnnotationIds);
+        }
         break;
       case " ":
         e.preventDefault();
@@ -144,7 +225,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
         timeline.stepNextFrame();
         break;
     }
-  }, [annotationTool, imageTools, timeline]);
+  }, [annotationTool, imageTools, timeline, canUndo, canRedo, onUndo, onRedo, multiSelectedAnnotationIds, onMultiSelect, onBatchDeleteAnnotations]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -258,6 +339,76 @@ export function ViewerPanel(props: ViewerPanelProps) {
           minHeight: 0
         }}
       >
+        {/* H3: Multi-select batch toolbar */}
+        {multiSelectedAnnotationIds.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 60,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "rgba(15,16,24,0.95)",
+              border: "1px solid #3c3e58",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 12,
+              color: "#c9ccd8",
+              pointerEvents: "auto",
+            }}
+          >
+            <span>已選 {multiSelectedAnnotationIds.length} 筆</span>
+            <button
+              type="button"
+              onClick={() => onBatchDeleteAnnotations?.(multiSelectedAnnotationIds)}
+              style={{
+                background: "#7f1d1d",
+                border: "1px solid #ef4444",
+                borderRadius: 4,
+                color: "#fca5a5",
+                fontSize: 11,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              刪除全部
+            </button>
+            {/* M2: propagate selected to other frames */}
+            <button
+              type="button"
+              onClick={() => setPropagateOpen(true)}
+              style={{
+                background: "rgba(79,140,255,0.15)",
+                border: "1px solid #4f8cff",
+                borderRadius: 4,
+                color: "#93c5fd",
+                fontSize: 11,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              複製到其他幀
+            </button>
+            <button
+              type="button"
+              onClick={() => onMultiSelect?.([])}
+              style={{
+                background: "transparent",
+                border: "1px solid #3c3e58",
+                borderRadius: 4,
+                color: "#7c7f9e",
+                fontSize: 11,
+                padding: "2px 6px",
+                cursor: "pointer",
+              }}
+            >
+              取消選取
+            </button>
+          </div>
+        )}
         {!currentVideoId ? (
           <div
             style={{
@@ -312,6 +463,8 @@ export function ViewerPanel(props: ViewerPanelProps) {
                 selectedAnnotationId={selectedAnnotationId}
                 onAnnotationSelect={onAnnotationSelect}
                 onAnnotationUpdated={onAnnotationUpdated}
+                multiSelectedAnnotationIds={multiSelectedAnnotationIds}
+                onMultiSelect={onMultiSelect}
               />
             )}
 
@@ -400,7 +553,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
             borderTop: "1px solid #252638",
             padding: "6px 10px",
             display: "grid",
-            gap: 6
+            gap: 4
           }}
         >
           {/* Timeline slider */}
@@ -429,6 +582,14 @@ export function ViewerPanel(props: ViewerPanelProps) {
             );
           })()}
 
+          {/* H2: Frame annotation bar */}
+          <FrameAnnotationBar
+            frames={timeline.frames}
+            durationSec={timeline.durationSec > 0 ? timeline.durationSec : sliderMax}
+            frameMarks={annotationFrameMarks}
+            onSeekToDisplayIndex={timeline.seekToDisplayIndex}
+          />
+
           {/* Controls row */}
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
             {/* Center group */}
@@ -452,7 +613,73 @@ export function ViewerPanel(props: ViewerPanelProps) {
               <SkipForward size={16} />
             </PlayBtn>
 
-            <span style={{ fontSize: 12, color: "#c9ccd8", fontVariantNumeric: "tabular-nums", marginLeft: 8, flexShrink: 0 }}>
+            {/* H4: Frame jump input */}
+            {frameInputActive ? (
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                max={timeline.frames.length}
+                value={frameInputValue}
+                onChange={(e) => setFrameInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const n = parseInt(frameInputValue, 10);
+                    if (!isNaN(n)) timeline.seekToDisplayIndex(n);
+                    setFrameInputActive(false);
+                    setFrameInputValue("");
+                  } else if (e.key === "Escape") {
+                    setFrameInputActive(false);
+                    setFrameInputValue("");
+                  }
+                }}
+                onBlur={() => { setFrameInputActive(false); setFrameInputValue(""); }}
+                style={{
+                  width: 52,
+                  height: 22,
+                  background: "#252638",
+                  border: "1px solid #4f8cff",
+                  borderRadius: 3,
+                  color: "#d4d6f0",
+                  fontSize: 11,
+                  textAlign: "center",
+                  outline: "none",
+                  marginLeft: 8,
+                }}
+              />
+            ) : (
+              <span
+                title="點擊輸入幀號跳轉"
+                onClick={() => {
+                  setFrameInputActive(true);
+                  setFrameInputValue(String(timeline.currentFrame?.displayIndex ?? 1));
+                }}
+                style={{
+                  fontSize: 11,
+                  color: "#7c7f9e",
+                  fontVariantNumeric: "tabular-nums",
+                  marginLeft: 8,
+                  cursor: "pointer",
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  border: "1px solid transparent",
+                  flexShrink: 0,
+                  transition: "border-color 0.15s, color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLSpanElement).style.borderColor = "#3c3e58";
+                  (e.currentTarget as HTMLSpanElement).style.color = "#c9ccd8";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLSpanElement).style.borderColor = "transparent";
+                  (e.currentTarget as HTMLSpanElement).style.color = "#7c7f9e";
+                }}
+              >
+                f:{timeline.currentFrame?.displayIndex ?? 0}/{timeline.frames.length}
+              </span>
+            )}
+
+            <span style={{ fontSize: 12, color: "#c9ccd8", fontVariantNumeric: "tabular-nums", marginLeft: 4, flexShrink: 0 }}>
               {formatClock(timeline.currentTimeSec)} / {formatClock(sliderMax)}
             </span>
 
@@ -503,6 +730,16 @@ export function ViewerPanel(props: ViewerPanelProps) {
       )}
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* M2: Propagate dialog */}
+      <PropagateDialog
+        open={propagateOpen}
+        onClose={() => setPropagateOpen(false)}
+        annotations={currentFrameAnnotations.filter((a) => multiSelectedAnnotationIds.includes(a.id))}
+        currentDisplayIndex={timeline.currentFrame?.displayIndex ?? 1}
+        totalFrames={timeline.frames.length}
+        onPropagate={handlePropagate}
+      />
     </div>
   );
 }

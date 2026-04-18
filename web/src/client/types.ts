@@ -82,6 +82,8 @@ export interface BootstrapData {
     source: string;
     is_visible: number;
     annotation_count: number;
+    stroke_width: number;
+    stroke_color: string | null;
   }>;
   annotationsCurrentWindow: Array<{
     id: string;

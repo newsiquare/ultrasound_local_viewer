@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createAnnotation } from "@/client/api";
-import { AnnotationGeometry, AnnotationType } from "@/client/types";
+import { AnnotationGeometry, AnnotationItem, AnnotationType } from "@/client/types";
 
 export type AnnotationToolType = "SELECT" | "TEXT" | "RECT" | "POLYGON";
 
@@ -17,6 +17,8 @@ export interface UseAnnotationToolOptions {
   frameId: string | null;
   selectedCategoryId: string | null;
   onCreated?: () => void;
+  /** Called with the full AnnotationItem after creation — used by undo/redo history */
+  onCreatedWithItem?: (item: AnnotationItem) => void;
 }
 
 export interface UseAnnotationToolResult {
@@ -41,7 +43,7 @@ export interface UseAnnotationToolResult {
 }
 
 export function useAnnotationTool(options: UseAnnotationToolOptions): UseAnnotationToolResult {
-  const { videoId, frameId, selectedCategoryId, onCreated } = options;
+  const { videoId, frameId, selectedCategoryId, onCreated, onCreatedWithItem } = options;
 
   const [activeTool, setActiveToolState] = useState<AnnotationToolType | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -106,7 +108,7 @@ export function useAnnotationTool(options: UseAnnotationToolOptions): UseAnnotat
       setIsSubmitting(true);
       setLastError(null);
       try {
-        await createAnnotation(videoId, {
+        const created = await createAnnotation(videoId, {
           frameId,
           categoryId: selectedCategoryId,
           annotationType: typeMap[geometry.type],
@@ -115,6 +117,7 @@ export function useAnnotationTool(options: UseAnnotationToolOptions): UseAnnotat
         });
         clearDraft();
         onCreated?.();
+        onCreatedWithItem?.(created);
       } catch (err) {
         setLastError(err instanceof Error ? err.message : "建立標註失敗");
       } finally {

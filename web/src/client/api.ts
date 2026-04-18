@@ -549,6 +549,26 @@ export async function deleteAnnotation(videoId: string, annotationId: string): P
   }
 }
 
+export async function fetchAnnotationsAll(
+  videoId: string,
+  options?: { source?: "MANUAL" | "AI"; signal?: AbortSignal }
+): Promise<AnnotationItem[]> {
+  const items: AnnotationItem[] = [];
+  let cursor: number | null = 0;
+
+  while (cursor !== null) {
+    const page = await fetchAnnotations(videoId, {
+      source: options?.source,
+      cursor,
+      limit: 1000,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  }
+
+  return items;
+}
+
 export async function deleteVideo(videoId: string): Promise<void> {
   const response = await fetch(`/api/videos/${videoId}`, {
     method: "DELETE"

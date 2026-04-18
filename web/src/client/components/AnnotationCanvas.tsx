@@ -20,7 +20,11 @@ interface AnnotationCanvasProps {
   annotationVisible: boolean;
   selectedAnnotationId?: string | null;
   onAnnotationSelect?: (id: string | null) => void;
-  onAnnotationUpdated?: (id: string, geometry: AnnotationGeometry) => void;
+  /** Also receives the old geometry so callers can push to undo history */
+  onAnnotationUpdated?: (id: string, geometry: AnnotationGeometry, oldGeometry?: AnnotationGeometry) => void;
+  /** Multi-select IDs produced by rubber-band */
+  multiSelectedAnnotationIds?: string[];
+  onMultiSelect?: (ids: string[]) => void;
 }
 
 function getCategoryColor(categories: CategoryItem[], categoryId: string): string {
@@ -48,6 +52,13 @@ interface DragState {
   startX: number;
   startY: number;
   origGeometry: AnnotationGeometry;
+}
+
+interface RubberBandState {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
 }
 
 const MIN_BBOX_SIZE = 4;
@@ -134,7 +145,7 @@ function renderGeometry(
         y={geometry.y}
         width={geometry.width}
         height={geometry.height}
-        fill="none"
+        fill={`${color}22`}
         stroke={color}
         strokeWidth={strokeWidth}
         strokeOpacity={opacity}
@@ -258,6 +269,35 @@ function renderPolygonHandles(
   ));
 }
 
+function annotationBoundingBox(geo: AnnotationGeometry): { x: number; y: number; width: number; height: number } | null {
+  if (geo.type === "bbox") {
+    return { x: geo.x, y: geo.y, width: geo.width, height: geo.height };
+  }
+  if (geo.type === "polygon" && geo.points.length > 0) {
+    const xs = geo.points.map((p) => p.x);
+    const ys = geo.points.map((p) => p.y);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+  }
+  if (geo.type === "text") {
+    return { x: geo.x - 6, y: geo.y - 6, width: 12, height: 12 };
+  }
+  return null;
+}
+
+function rectsIntersect(
+  r1: { x: number; y: number; width: number; height: number },
+  r2: { x: number; y: number; width: number; height: number }
+): boolean {
+  return (
+    r1.x < r2.x + r2.width &&
+    r1.x + r1.width > r2.x &&
+    r1.y < r2.y + r2.height &&
+    r1.y + r1.height > r2.y
+  );
+}
+
 export function AnnotationCanvas({
   videoWidth,
   videoHeight,
@@ -267,7 +307,9 @@ export function AnnotationCanvas({
   annotationVisible,
   selectedAnnotationId = null,
   onAnnotationSelect,
-  onAnnotationUpdated
+  onAnnotationUpdated,
+  multiSelectedAnnotationIds = [],
+  onMultiSelect,
 }: AnnotationCanvasProps) {
   const {
     activeTool,
@@ -281,8 +323,10 @@ export function AnnotationCanvas({
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const rubberBandRef = useRef<RubberBandState | null>(null);
   const [liveGeometry, setLiveGeometry] = useState<AnnotationGeometry | null>(null);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  const [rubberBand, setRubberBand] = useState<RubberBandState | null>(null);
 
   const isDrawMode = activeTool !== null && activeTool !== "SELECT";
   const isSelectMode = activeTool === "SELECT" || activeTool === null;
@@ -325,13 +369,27 @@ export function AnnotationCanvas({
   // SVG-level pointer handlers
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDrawMode) return;
-      e.preventDefault();
-      const coords = getSvgCoords(e);
-      if (!coords) return;
-      handlePointerDown(coords.x, coords.y);
+      if (isDrawMode) {
+        e.preventDefault();
+        const coords = getSvgCoords(e);
+        if (!coords) return;
+        handlePointerDown(coords.x, coords.y);
+        return;
+      }
+      // SELECT mode: start rubber-band on empty canvas click
+      if (isSelectMode) {
+        const coords = getSvgCoords(e);
+        if (!coords) return;
+        rubberBandRef.current = {
+          startX: coords.x,
+          startY: coords.y,
+          currentX: coords.x,
+          currentY: coords.y,
+        };
+        setRubberBand({ ...rubberBandRef.current });
+      }
     },
-    [isDrawMode, getSvgCoords, handlePointerDown]
+    [isDrawMode, isSelectMode, getSvgCoords, handlePointerDown]
   );
 
   const onPointerMove = useCallback(
@@ -342,6 +400,13 @@ export function AnnotationCanvas({
 
       if (isDrawMode) {
         handlePointerMove(coords.x, coords.y);
+        return;
+      }
+
+      const rb = rubberBandRef.current;
+      if (rb) {
+        rubberBandRef.current = { ...rb, currentX: coords.x, currentY: coords.y };
+        setRubberBand({ ...rubberBandRef.current });
         return;
       }
 
@@ -364,21 +429,54 @@ export function AnnotationCanvas({
         handlePointerUp(coords.x, coords.y);
         return;
       }
+
+      // Finish rubber-band selection
+      const rb = rubberBandRef.current;
+      if (rb) {
+        rubberBandRef.current = null;
+        setRubberBand(null);
+        const selRect = {
+          x: Math.min(rb.startX, rb.currentX),
+          y: Math.min(rb.startY, rb.currentY),
+          width: Math.abs(rb.currentX - rb.startX),
+          height: Math.abs(rb.currentY - rb.startY),
+        };
+        if (selRect.width > 4 && selRect.height > 4) {
+          const selected = annotations
+            .filter((a) => {
+              if (!a.isVisible || !a.geometry) return false;
+              const bb = annotationBoundingBox(a.geometry);
+              return bb ? rectsIntersect(selRect, bb) : false;
+            })
+            .map((a) => a.id);
+          if (selected.length > 0) {
+            onMultiSelect?.(selected);
+          } else {
+            onAnnotationSelect?.(null);
+          }
+        } else {
+          onAnnotationSelect?.(null);
+        }
+        return;
+      }
+
       const drag = dragRef.current;
       if (drag && liveGeometry) {
-        onAnnotationUpdated?.(drag.annotationId, liveGeometry);
+        onAnnotationUpdated?.(drag.annotationId, liveGeometry, drag.origGeometry);
       }
       dragRef.current = null;
       setLiveGeometry(null);
     },
-    [isDrawMode, getSvgCoords, handlePointerUp, liveGeometry, onAnnotationUpdated]
+    [isDrawMode, getSvgCoords, handlePointerUp, liveGeometry, onAnnotationUpdated, annotations, onMultiSelect, onAnnotationSelect]
   );
 
   const onPointerLeave = useCallback(() => {
     setCursor(null);
+    rubberBandRef.current = null;
+    setRubberBand(null);
     const drag = dragRef.current;
     if (drag && liveGeometry) {
-      onAnnotationUpdated?.(drag.annotationId, liveGeometry);
+      onAnnotationUpdated?.(drag.annotationId, liveGeometry, drag.origGeometry);
     }
     dragRef.current = null;
     setLiveGeometry(null);
@@ -398,11 +496,14 @@ export function AnnotationCanvas({
   const onSvgClick = useCallback(
     (e: React.MouseEvent) => {
       if (!isSelectMode) return;
+      // Only deselect when clicking directly on the SVG (empty space)
+      // and no rubber-band was just finished
       if (e.target === svgRef.current) {
         onAnnotationSelect?.(null);
+        onMultiSelect?.([]);
       }
     },
-    [isSelectMode, onAnnotationSelect]
+    [isSelectMode, onAnnotationSelect, onMultiSelect]
   );
 
   // Draft preview during drawing
@@ -493,6 +594,7 @@ export function AnnotationCanvas({
             const categoryStroke = getCategoryStroke(categories, annotation.categoryId);
             const color = getCategoryColor(categories, annotation.categoryId);
             const isSelected = annotation.id === selectedAnnotationId;
+            const isMultiSelected = multiSelectedAnnotationIds.includes(annotation.id);
             const displayGeo = isSelected && liveGeometry ? liveGeometry : annotation.geometry;
 
             return (
@@ -535,6 +637,21 @@ export function AnnotationCanvas({
                   </>
                 )}
 
+                {/* Multi-selected highlight (not single-selected) */}
+                {isMultiSelected && !isSelected && displayGeo && (
+                  <rect
+                    x={(displayGeo.type === "bbox" ? displayGeo.x : 0) - 2}
+                    y={(displayGeo.type === "bbox" ? displayGeo.y : 0) - 2}
+                    width={(displayGeo.type === "bbox" ? displayGeo.width : 10) + 4}
+                    height={(displayGeo.type === "bbox" ? displayGeo.height : 10) + 4}
+                    fill="rgba(79,140,255,0.15)"
+                    stroke="#4f8cff"
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    pointerEvents="none"
+                  />
+                )}
+
                 {/* Not selected: click to select */}
                 {!isSelected && isSelectMode && displayGeo && (
                   renderHitArea(displayGeo, (e) =>
@@ -548,6 +665,21 @@ export function AnnotationCanvas({
       {/* Draft preview */}
       {draftPreview}
       {crosshair}
+
+      {/* Rubber-band selection rect */}
+      {rubberBand && (
+        <rect
+          x={Math.min(rubberBand.startX, rubberBand.currentX)}
+          y={Math.min(rubberBand.startY, rubberBand.currentY)}
+          width={Math.abs(rubberBand.currentX - rubberBand.startX)}
+          height={Math.abs(rubberBand.currentY - rubberBand.startY)}
+          fill="rgba(79,140,255,0.08)"
+          stroke="#4f8cff"
+          strokeWidth={1.5}
+          strokeDasharray="5 3"
+          pointerEvents="none"
+        />
+      )}
     </svg>
   );
 }
