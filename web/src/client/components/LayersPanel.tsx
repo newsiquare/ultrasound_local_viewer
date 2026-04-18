@@ -58,9 +58,9 @@ function sortCategories(categories: CategoryItem[]): CategoryItem[] {
 }
 
 function AnnotationTypeIcon({ type }: { type: string }) {
-  if (type === "POLYGON") return <Pentagon size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
-  if (type === "TEXT") return <Type size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
-  return <Square size={13} style={{ color: "#7880a0", flexShrink: 0 }} />;
+  if (type === "POLYGON") return <Pentagon size={13} style={{ color: "#9699b0", flexShrink: 0 }} />;
+  if (type === "TEXT") return <Type size={13} style={{ color: "#9699b0", flexShrink: 0 }} />;
+  return <Square size={13} style={{ color: "#9699b0", flexShrink: 0 }} />;
 }
 
 function formatGeometryInfo(annotation: AnnotationItem): string {
@@ -474,7 +474,7 @@ export function LayersPanel(props: LayersPanelProps) {
                     }}
                     onClick={() => onAnnotationSelect?.(isSelected ? null : item.id)}
                     style={{
-                      display: "flex", alignItems: "center", height: 34, gap: 5, padding: "0 6px",
+                      display: "flex", alignItems: "center", height: 34, gap: 8, padding: "0 6px",
                       borderRadius: isInfoOpen ? "6px 6px 0 0" : 6,
                       border: isSelected
                         ? `1.5px solid ${cat?.color ?? "#4f8cff"}`
@@ -487,12 +487,26 @@ export function LayersPanel(props: LayersPanelProps) {
                     {/* Type icon */}
                     <AnnotationTypeIcon type={item.annotationType} />
 
-                    {/* Color dot + category dropdown */}
+                    {/* Type label */}
+                    <span style={{
+                      fontSize: 9,
+                      fontFamily: "monospace",
+                      color: "#9699b0",
+                      letterSpacing: 0.5,
+                      textTransform: "uppercase",
+                      flexShrink: 0,
+                      userSelect: "none",
+                      marginRight: 4
+                    }}>
+                      {item.annotationType === "BBOX" ? "Rect" : item.annotationType === "POLYGON" ? "Poly" : "Text"}
+                    </span>
+
+                    {/* Color dot + category dropdown (fixed width) */}
                     <div
                       style={{
-                        display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 4,
+                        display: "flex", alignItems: "center", gap: 4,
                         background: "rgba(255,255,255,0.04)", borderRadius: 999,
-                        padding: "0 8px 0 6px", height: 22
+                        padding: "0 8px 0 6px", height: 22, flexShrink: 0
                       }}
                     >
                       <div style={{ width: 7, height: 7, borderRadius: "50%", background: cat?.color ?? "#7880a0", flexShrink: 0 }} />
@@ -502,7 +516,7 @@ export function LayersPanel(props: LayersPanelProps) {
                         onClick={(e) => e.stopPropagation()}
                         disabled={!videoId || rowBusy}
                         style={{
-                          flex: 1, minWidth: 0, background: "transparent", border: "none",
+                          width: 80, background: "transparent", border: "none",
                           color: "#c8cae8", fontSize: 11, cursor: "pointer",
                           fontFamily: "inherit", outline: "none"
                         }}
@@ -510,6 +524,9 @@ export function LayersPanel(props: LayersPanelProps) {
                         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
+
+                    {/* Spacer */}
+                    <div style={{ flex: 1 }} />
 
                     {/* Info toggle */}
                     <button
