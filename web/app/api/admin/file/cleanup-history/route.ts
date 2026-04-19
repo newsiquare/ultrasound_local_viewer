@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
@@ -53,10 +52,6 @@ function parseMaybeJson(text: string): unknown {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const { searchParams } = new URL(req.url);
     const page = parsePositiveInt(searchParams.get("page"), 1, Number.MAX_SAFE_INTEGER);

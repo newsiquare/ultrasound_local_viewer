@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
@@ -104,10 +103,6 @@ function includesVideoId(parsed: unknown, videoId: string): boolean {
 }
 
 export async function GET(req: NextRequest, context: RouteContext): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const { videoId } = await context.params;
     if (!videoId) {

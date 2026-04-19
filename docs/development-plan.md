@@ -1,7 +1,7 @@
 # 開發計畫：本地單頁影片辨識服務（可實作規格版）
 
-最後更新：2026-04-17  
-版本：v2.6（admin `/file` 改為 HTTP Basic Auth 即時登入彈窗）
+最後更新：2026-04-19  
+版本：v2.7（admin `/file` 改為同頁 Auth Gate 遮罩登入，Session Cookie 認證）
 
 ## 快速導覽（TOC）
 
@@ -367,10 +367,10 @@ Text：
 1. 只有 admin 可存取 `/file`。
 2. 權限檢查必須在伺服器端執行（不可只靠前端隱藏）。
 3. `/api/admin/file/*` 全部端點僅允許 admin。
-4. 本地版 admin 鑑權採 HTTP Basic Auth（環境變數：`ADMIN_USER`、`ADMIN_PASSWORD`）。
-5. 驗證規則：`Authorization: Basic base64(user:password)` 比對 `ADMIN_USER/ADMIN_PASSWORD`。
-6. 未登入或驗證失敗時回 `401`，且需帶 `WWW-Authenticate: Basic realm=\"File Admin\"` 以觸發瀏覽器登入彈窗。
-7. 提供 `GET /file/logout`：固定回 `401` + `WWW-Authenticate`，用於「切換帳號」重新登入。
+4. 本地版 admin 鑑權採同頁 Auth Gate 遮罩（環境變數：`ADMIN_USER`、`ADMIN_PASSWORD`）。
+5. 驗證成功後由伺服器簽發 HMAC-SHA256 Session Token，寫入 HttpOnly `admin_session` cookie（24 小時效期）。
+6. 未登入或 cookie 過期時，`/file` 頁面顯示 Auth Gate 登入遮罩；`/api/admin/file/*` 回 `401 JSON`（不帶 `WWW-Authenticate`，不觸發瀏覽器彈窗）。
+7. 登出：點擊登出按鈕呼叫 `POST /api/auth/logout`，清除 cookie 後重新顯示登入遮罩。
 
 #### 3.4.2 頁面用途
 
@@ -877,7 +877,7 @@ Input:
 
 所有端點前綴：`/api/admin/file/*`，全部 admin-only。
 
-認證方式：HTTP Basic Auth（`ADMIN_USER` / `ADMIN_PASSWORD`）。
+認證方式：Session Cookie（由 `POST /api/auth/login` 發放 HttpOnly cookie，Middleware 驗證 HMAC 簽章）。
 
 #### `GET /api/admin/file/list`
 
@@ -1299,7 +1299,7 @@ Input：
 3. 類別刪除衝突 `409` 行為正確
 4. 上傳中止時不會留下半成品檔案或不完整 DB 記錄
 5. `GET /api/videos/:id/bootstrap` 可支援刷新後重建首屏
-6. `/api/admin/file/*` 需強制 HTTP Basic Auth（`ADMIN_USER/ADMIN_PASSWORD`）
+6. `/api/admin/file/*` 需強制 Session Cookie 認證（由 Middleware 統一驗證）
 7. upload 僅接受白名單格式，非法格式回 `415`
 8. bootstrap `windowBefore/windowAfter` 超過上限時需被 clamp 或回 `400`
 
@@ -1315,7 +1315,7 @@ Input：
 8. `/file` 可顯示風險摘要卡（P0/P1/P2、新增/恢復趨勢）。
 9. `/file` 可開啟風險事件列表並跳轉到對應影片。
 10. 風險事件需能顯示 `trigger_source` 與來源時間。
-11. 進入 `/file` 未登入時需立即彈出瀏覽器 Basic Auth 登入視窗。
+11. 進入 `/file` 未登入時，頁面顯示 Auth Gate 登入遮罩（不使用瀏覽器原生彈窗）。
 
 ---
 
@@ -1361,8 +1361,8 @@ Input：
 30. `/file` 風險事件列表可跳轉並定位到對應影片列
 31. 同檔名連續上傳 3 次會產生 3 個不同 `video_id`
 32. 同檔名新上傳影片的類別與標註初始值為 0，不沿用舊影片資料
-33. 呼叫 `/api/admin/file/list` 未帶 Basic Auth 回 `401`
-34. 呼叫 `/api/admin/file/list` 帶錯誤帳密回 `401`
+33. 呼叫 `/api/admin/file/list` 未帶有效 session cookie 回 `401 JSON`
+34. `POST /api/auth/login` 帶錯誤帳密回 `401 JSON`（訊息：「使用者名稱或密碼不正確」）
 35. 上傳白名單外格式（例如 `.wmv`）回 `415`
 36. `GET /api/videos/:id/bootstrap` 未帶參數時採 `windowBefore=60/windowAfter=60`
 37. `GET /api/videos/:id/bootstrap` 傳入超上限 window 時被 clamp 或回 `400`
@@ -1370,7 +1370,7 @@ Input：
 39. ai-worker 不可達時，`ai_jobs` 由 `PROCESSING` 收斂為 `FAILED`
 40. `timeline.json` 產生結果包含 `frames[*].ptsUs` 且單調不遞減
 41. `latest.coco.json` annotation 含擴充欄位 `track_id/frame_index/pts_us`
-42. 呼叫 `GET /file/logout` 後需再次跳出 Basic Auth 登入視窗
+42. 呼叫 `POST /api/auth/logout` 後 session cookie 清除，`/file` 頁面重新顯示 Auth Gate 遮罩
 43. 點擊 Rectangle 工具後影片自動暫停
 44. 未選取類別點擊繪製工具，顯示「請先選擇類別」提示
 45. Rectangle 繪製後標註清單新增一筆，且切換到其他幀後不顯示
@@ -1452,7 +1452,9 @@ Input：
 
 - [x] 真實 `ai-worker` 串接（`AI_RUNNER_MODE=worker`）
 - [x] worker 不可達時任務可收斂為 `FAILED`（`WORKER_UNREACHABLE`）
-- [x] `/file` HTTP Basic Auth 與 `/file/logout` 流程
+- [x] `/file` Auth Gate 同頁登入遮罩（session cookie 認證，取代瀏覽器 HTTP Basic Auth 彈窗）
+- [x] `POST /api/auth/login` / `GET /api/auth/me` / `POST /api/auth/logout` 認證 API
+- [x] Viewer TopBar 管理員頭像（登入後顯示，含登出下拉選單）
 - [x] 風險事件 API：`GET/POST/PATCH /api/admin/file/risk-events`
 - [x] 風險時間篩選（24h / 7d / 30d / all）
 - [x] 風險事件與一致性掃描關聯（`trigger_source=CONSISTENCY_SCAN`）

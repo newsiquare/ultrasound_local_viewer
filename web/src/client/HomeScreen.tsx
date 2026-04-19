@@ -28,6 +28,7 @@ export function HomeScreen() {
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [annotationRefreshKey, setAnnotationRefreshKey] = useState(0);
   const [selectedAnnotationCategoryId, setSelectedAnnotationCategoryId] = useState<string | null>(null);
+  const [adminUser, setAdminUser] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [hoveredAiId, setHoveredAiId] = useState<number | null>(null);
   const [selectedAiId, setSelectedAiId] = useState<number | null>(null);
@@ -190,6 +191,23 @@ export function HomeScreen() {
     void loadVideos();
   }, [loadVideos, viewerSession.isHydrated]);
 
+  // Fetch admin session for avatar display (best-effort, no auth required for viewer)
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(async (res) => {
+        if (res.ok) {
+          const json = (await res.json()) as { ok: boolean; data: { user: string } };
+          setAdminUser(json.data.user);
+        }
+      })
+      .catch(() => {/* not logged in — avatar simply won't show */});
+  }, []);
+
+  const handleAdminLogout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setAdminUser(null);
+  }, []);
+
   const uploadTask = useUploadTask({
     onUploadSuccess: (videoId) => {
       viewerSession.setCurrentVideoId(videoId);
@@ -246,6 +264,8 @@ export function HomeScreen() {
         onDeleteCurrentVideo={onDeleteCurrentVideo}
         onClearAiResult={onClearAiResult}
         onClearFrontendState={viewerSession.clearFrontendState}
+        adminUser={adminUser}
+        onAdminLogout={handleAdminLogout}
       />
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>

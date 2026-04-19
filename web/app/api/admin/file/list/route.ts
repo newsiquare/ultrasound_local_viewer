@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
-import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { ok } from "@/server/response";
 import { asErrorResponse } from "@/server/route-error";
 import { parsePositiveInt } from "@/server/validators";
@@ -147,10 +146,6 @@ function parseSortDir(rawValue: string | null): "ASC" | "DESC" {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const { searchParams } = new URL(req.url);
 

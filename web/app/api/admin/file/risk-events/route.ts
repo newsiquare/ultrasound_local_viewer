@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAdminCredentialFromEnv, isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
+import { getAdminCredentialFromEnv } from "@/server/auth-basic";
 import { executeMany, queryRows, sqlNullableString, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { ok } from "@/server/response";
@@ -192,10 +192,6 @@ async function writeAuditLog(payload: unknown, result: unknown, eventType: strin
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const { searchParams } = new URL(req.url);
     const page = parsePositiveInt(searchParams.get("page"), 1, Number.MAX_SAFE_INTEGER);
@@ -286,10 +282,6 @@ OFFSET ${offset};
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     let body: RiskEventMutationBody;
     try {
@@ -384,10 +376,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 }
 
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     let body: RiskEventMutationBody;
     try {

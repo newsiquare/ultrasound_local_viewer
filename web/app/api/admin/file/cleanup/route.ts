@@ -2,7 +2,7 @@ import { statfs } from "node:fs/promises";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAdminCredentialFromEnv, isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
+import { getAdminCredentialFromEnv } from "@/server/auth-basic";
 import { executeMany, queryRows, sqlString } from "@/server/db";
 import { HttpError } from "@/server/errors";
 import { getStoragePaths } from "@/server/paths";
@@ -209,10 +209,6 @@ async function getStorageUsagePercent(): Promise<number | null> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const body = (await req.json()) as CleanupRequestBody;
     const payload = parsePayload(body);

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isAuthorizedAdmin, unauthorizedBasic } from "@/server/auth-basic";
 import { queryRows } from "@/server/db";
 import { ok } from "@/server/response";
 import { asErrorResponse } from "@/server/route-error";
@@ -15,10 +14,6 @@ interface RiskRow {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorizedAdmin(req)) {
-    return unauthorizedBasic();
-  }
-
   try {
     const rows = await queryRows<RiskRow>(`
 SELECT severity, status, trigger_time, resolved_time

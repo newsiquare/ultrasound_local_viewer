@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import {
   cleanupAdminFiles,
@@ -15,6 +16,7 @@ import {
   reconcileAdminFiles,
   updateAdminRiskEvent
 } from "@/client/api";
+import { useAdminAuth } from "@/client/components/AuthGate";
 import {
   AdminFileAuditHistoryData,
   AdminFileAuditHistoryItem,
@@ -182,6 +184,7 @@ function parseStoredPreferences(): FileAdminPreferences | null {
 }
 
 export function FileAdminPage() {
+  const adminAuth = useAdminAuth();
   const [isPrefsHydrated, setIsPrefsHydrated] = useState(false);
   const [data, setData] = useState<AdminFileListData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -935,8 +938,8 @@ export function FileAdminPage() {
             管理影片資產、一致性狀態與維運資料。
           </p>
         </div>
-        <a
-          href="/file/logout"
+        <Link
+          href="/"
           style={{
             display: "inline-block",
             textDecoration: "none",
@@ -944,11 +947,32 @@ export function FileAdminPage() {
             borderRadius: 8,
             padding: "8px 12px",
             color: "#c9ccd8",
-            background: "#171824"
+            background: "#171824",
+            marginRight: 8,
+            fontSize: 13,
           }}
         >
-          切換帳號
-        </a>
+          ← 返回 Viewer
+        </Link>
+        {adminAuth && (
+          <button
+            type="button"
+            onClick={() => void adminAuth.logout()}
+            style={{
+              display: "inline-block",
+              border: "1px solid #3c3e58",
+              borderRadius: 8,
+              padding: "8px 12px",
+              color: "#f87171",
+              background: "#171824",
+              fontFamily: "inherit",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            登出
+          </button>
+        )}
       </header>
 
       <form onSubmit={onSearchSubmit} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>

@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Download, HelpCircle, Settings, Trash2, Upload, X } from "lucide-react";
+import { Download, ExternalLink, HelpCircle, LogOut, Settings, Trash2, Upload, X } from "lucide-react";
 
 import { exportAnnotations, ExportFormat } from "@/client/api";
 import { KeyboardShortcutsModal } from "@/client/components/KeyboardShortcutsModal";
@@ -14,15 +14,19 @@ interface TopBarProps {
   onDeleteCurrentVideo: () => Promise<void>;
   onClearAiResult: () => Promise<void>;
   onClearFrontendState: () => void;
+  adminUser?: string | null;
+  onAdminLogout?: () => Promise<void>;
 }
 
 export function TopBar(props: TopBarProps) {
-  const { uploadTask, currentVideoId, onDeleteCurrentVideo, onClearAiResult, onClearFrontendState } = props;
+  const { uploadTask, currentVideoId, onDeleteCurrentVideo, onClearAiResult, onClearFrontendState, adminUser, onAdminLogout } = props;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isClearingAi, setIsClearingAi] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // L3: `?` global shortcut
@@ -382,6 +386,117 @@ export function TopBar(props: TopBarProps) {
       />
 
       <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Admin user avatar */}
+      {adminUser && (
+        <div style={{ position: "relative", marginLeft: 4 }}>
+          <button
+            type="button"
+            onClick={() => setAvatarMenuOpen((v) => !v)}
+            title={`管理員：${adminUser}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #4f8cff, #7c5cbf)",
+              border: "2px solid rgba(79,140,255,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#fff",
+              cursor: "pointer",
+              flexShrink: 0,
+              padding: 0,
+            }}
+          >
+            {adminUser[0]?.toUpperCase()}
+          </button>
+
+          {avatarMenuOpen && (
+            <>
+              <div
+                style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                onClick={() => setAvatarMenuOpen(false)}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  zIndex: 50,
+                  background: "#171824",
+                  border: "1px solid #3c3e58",
+                  borderRadius: 10,
+                  padding: "6px 0",
+                  minWidth: 200,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                }}
+              >
+                {/* User info header */}
+                <div style={{ padding: "8px 14px 10px", borderBottom: "1px solid #252638" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: "50%",
+                      background: "linear-gradient(135deg, #4f8cff, #7c5cbf)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0,
+                    }}>
+                      {adminUser[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e3f0" }}>{adminUser}</div>
+                      <div style={{ fontSize: 11, color: "#585a78", marginTop: 1 }}>管理員</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Admin panel link */}
+                <a
+                  href="/file"
+                  onClick={() => setAvatarMenuOpen(false)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 14px",
+                    color: "#d4d6f0", textDecoration: "none",
+                    fontSize: 13,
+                  }}
+                >
+                  <ExternalLink size={13} />
+                  管理後台
+                </a>
+
+                <div style={{ height: 1, background: "#252638", margin: "4px 0" }} />
+
+                {/* Logout */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setAvatarMenuOpen(false);
+                    if (!onAdminLogout) return;
+                    setIsLoggingOut(true);
+                    try { await onAdminLogout(); } finally { setIsLoggingOut(false); }
+                  }}
+                  disabled={isLoggingOut}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", padding: "8px 14px",
+                    background: "none", border: "none",
+                    color: "#f87171", fontSize: 13, fontFamily: "inherit",
+                    cursor: isLoggingOut ? "not-allowed" : "pointer",
+                    opacity: isLoggingOut ? 0.5 : 1,
+                    textAlign: "left",
+                  }}
+                >
+                  <LogOut size={13} />
+                  {isLoggingOut ? "登出中…" : "登出管理員"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
