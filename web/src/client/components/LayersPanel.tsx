@@ -343,11 +343,11 @@ export function LayersPanel(props: LayersPanelProps) {
         </div>
       )}
 
-      {/* Scrollable content: 3 stacked sections */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+      {/* Fixed-height 3-section flex layout — prevents AI layer from jumping when annotation data loads/unloads */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* ── Section 1: 類別圖層 ── */}
-        <div style={{ padding: "8px 10px 10px" }}>
+        <div style={{ flex: "0 0 28%", overflowY: "auto", overflowX: "hidden", padding: "8px 10px 10px" }}>
           {/* Section header */}
           <div style={{ display: "flex", alignItems: "center", height: 30, gap: 6, marginBottom: 8 }}>
             <button
@@ -550,10 +550,10 @@ export function LayersPanel(props: LayersPanelProps) {
           })}
         </div>
 
-        <div style={{ borderTop: "1px solid #252638", margin: "4px 10px" }} />
+        <div style={{ borderTop: "1px solid #252638", flexShrink: 0 }} />
 
         {/* ── Section 2: 標註圖層 ── */}
-        <div style={{ padding: "8px 10px 10px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "8px 10px 10px" }}>
           {/* Section header */}
           <div style={{ display: "flex", alignItems: "center", height: 30, gap: 6, marginBottom: 8 }}>
             <button
@@ -565,9 +565,6 @@ export function LayersPanel(props: LayersPanelProps) {
               {layerState.annotationVisible ? <Eye size={13} /> : <EyeOff size={13} />}
             </button>
             <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#d4d6f0" }}>標註圖層</span>
-            {frameAnnotations.loading && (
-              <RefreshCw size={11} style={{ color: "#7880a0", animation: "spin 1s linear infinite", flexShrink: 0 }} />
-            )}
             <span style={{ fontSize: 10, color: "#585a78", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
               {frameAnnotations.items.length > 0 ? `${frameAnnotations.items.length} 個` : ""}
             </span>
@@ -596,8 +593,9 @@ export function LayersPanel(props: LayersPanelProps) {
             </div>
           )}
 
-          {/* Empty frame */}
-          {viewerFrameId && !frameAnnotations.loading && frameAnnotations.items.length === 0 && (
+          {/* Placeholder: always visible when no items — never flickers because stale items from the
+              previous frame keep it hidden during loading, and it only appears when items truly become empty */}
+          {viewerFrameId && frameAnnotations.items.length === 0 && (
             <div style={{ fontSize: 12, color: "#585a78", padding: "8px 0", textAlign: "center", lineHeight: 1.5 }}>
               此幀無手動標註<br />
               <span style={{ fontSize: 11 }}>請使用工具列中的矩形 / 多邊形 / 文字工具繪製</span>
@@ -764,10 +762,10 @@ export function LayersPanel(props: LayersPanelProps) {
           </div>
         </div>
 
-        <div style={{ borderTop: "1px solid #252638", margin: "4px 10px" }} />
+        <div style={{ borderTop: "1px solid #252638", flexShrink: 0 }} />
 
         {/* ── Section 3: AI 圖層 ── */}
-        <div style={{ padding: "8px 10px 12px" }}>
+        <div style={{ flex: "0 0 37%", overflowY: "auto", overflowX: "hidden", padding: "8px 10px 12px" }}>
           {/* Section header */}
           <div style={{ display: "flex", alignItems: "center", height: 30, gap: 6, marginBottom: 8 }}>
             <button

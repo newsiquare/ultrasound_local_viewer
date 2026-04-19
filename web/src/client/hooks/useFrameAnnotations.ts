@@ -18,6 +18,8 @@ interface UseFrameAnnotationsResult {
   items: AnnotationItem[];
   loading: boolean;
   error: string | null;
+  /** True only when the items reflect the currently requested frameId (not stale from a previous frame) */
+  isConfirmed: boolean;
 }
 
 const REQUEST_THROTTLE_MS = 120;
@@ -28,6 +30,7 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
   const [items, setItems] = useState<AnnotationItem[]>(fallbackItems ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchedFrameId, setFetchedFrameId] = useState<string | null>(null);
 
   const cacheRef = useRef<Map<string, AnnotationItem[]>>(new Map());
   const inFlightRef = useRef<Map<string, Promise<AnnotationItem[]>>>(new Map());
@@ -48,6 +51,7 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
       const cached = cacheRef.current.get(key);
       if (cached) {
         setItems(cached);
+        setFetchedFrameId(targetFrameId);
         setLoading(false);
         setError(null);
         return;
@@ -102,6 +106,7 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
 
         if (activeKeyRef.current === key) {
           setItems(resolved);
+          setFetchedFrameId(targetFrameId);
           setError(null);
         }
       } catch (err) {
@@ -161,6 +166,7 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
     }
 
     setItems([]);
+    setFetchedFrameId(null);
     setError(null);
     setLoading(false);
   }, [videoId]);
@@ -205,8 +211,9 @@ export function useFrameAnnotations(options: UseFrameAnnotationsOptions): UseFra
     () => ({
       items,
       loading,
-      error
+      error,
+      isConfirmed: fetchedFrameId === frameId
     }),
-    [error, items, loading]
+    [error, fetchedFrameId, frameId, items, loading]
   );
 }
