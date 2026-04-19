@@ -264,3 +264,99 @@
 
 **修改範圍（已實作）**：
 - `web/src/client/components/LayersPanel.tsx`：外層單一可捲動容器改為 `flex column`；三個 section 分配固定比例（類別 28% / 標註 flex:1 / AI 37%），各自 `overflow-y: auto` 內部捲動；分隔線加 `flex-shrink: 0`。✅ 2026-04-19
+
+### BUG-02：標註圖層佔位文字與 loading spinner 閃爍
+
+**發現日期**：2026-04-19  
+**症狀**：播放影片時，標註圖層的「此幀無手動標註」佔位文字與 loading spinner 會隨每幀切換忽現忽滅，閃爍感明顯。
+
+**根本原因**：  
+每次幀切換 `useFrameAnnotations` 重置 `items = []`，佔位文字顯示條件 `!loading && items.length === 0` 短暫成立，導致文字/spinner 在每幀閃現一次。
+
+**修法：Stale-while-revalidate + 移除 spinner**
+
+1. `useFrameAnnotations`：新增 `fetchedFrameId` state，幀切換時**不清空 items**，保留舊幀資料直到新幀 fetch 完成才替換。回傳 `isConfirmed: fetchedFrameId === frameId`。
+2. `LayersPanel.tsx`：佔位文字條件改為僅 `items.length === 0`（移除 `!loading` 守衛）。因舊幀 stale 資料撐著，播放期間 items 不會塌陷為空，佔位文字自然不閃爍。
+3. `LayersPanel.tsx`：移除標註圖層 header 的 loading spinner（stale 策略下 spinner 資訊無意義，反而造成閃爍）。
+
+**修改範圍（已實作）**：
+- `web/src/client/hooks/useFrameAnnotations.ts`：加入 `fetchedFrameId` state 與 `isConfirmed` 回傳值 ✅ 2026-04-19
+- `web/src/client/components/LayersPanel.tsx`：佔位文字條件簡化 + 移除 loading spinner ✅ 2026-04-19
+
+---
+
+## 追加優化記錄
+
+### UPG-01：上傳流程 UX 優化
+
+**提案日期**：2026-04-19
+
+#### 規格（單列設計，所有狀態皆顯示於 TopBar 同一列）
+
+| 狀態 | TopBar 顯示 |
+|------|------------|
+| IDLE | `⬆ 上傳影片` |
+| UPLOADING | `⬆ 上傳影片  source.mp4 · 234MB  [████░░] 68%  ✕` |
+| PARSING_METADATA | `⬆ 上傳影片  source.mp4  [  ━━►  ] 分析中…  ✕` |
+| READY | `⬆ 上傳影片  ✅ 上傳完成`（3 秒後自動淡出） |
+| FAILED | `⬆ 上傳影片  ❌ 上傳失敗：<訊息>  ✕`（需手動關閉） |
+| CANCELED | `⬆ 上傳影片  ℹ 上傳已取消`（3 秒後自動淡出） |
+
+#### UI 設計示意圖
+
+**IDLE（預設）**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🫀 Ultrasound Viewer  │  ⬆ 上傳影片                    ⬇ 匯出  ⚙  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**UPLOADING（傳輸中）**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🫀 Ultrasound Viewer  │  ⬆ 上傳影片  source.mp4 · 234MB  [████░░] 68%  ✕  │  ⬇ 匯出  ⚙  │
+└──────────────────────────────────────────────────────────────────────┘
+                                                ↑
+                              藍色 #4f8cff 膠囊進度條（固定寬約 80px）
+```
+
+**PARSING_METADATA（後端 ffprobe 分析中）**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🫀 Ultrasound Viewer  │  ⬆ 上傳影片  source.mp4  [  ━━►   ] 分析中…  ✕  │  ⬇ 匯出  ⚙  │
+└──────────────────────────────────────────────────────────────────────┘
+                                           ↑
+                            琥珀色 #f59e0b 光條左右來回（indeterminate）
+```
+
+**READY（成功，3 秒後自動淡出）**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🫀 Ultrasound Viewer  │  ⬆ 上傳影片  ✅ 上傳完成                    ⬇ 匯出  ⚙  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**FAILED（失敗，需手動關閉）**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🫀 Ultrasound Viewer  │  ⬆ 上傳影片  ❌ 上傳失敗：格式不支援  ✕    ⬇ 匯出  ⚙  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+#### 進度條樣式
+
+```
+UPLOADING（藍色填充）:
+╭──────────────────╮
+│ ████████░░░░  68%│  寬 80px，高 6px，圓角膠囊，色 #4f8cff
+╰──────────────────╯
+
+PARSING_METADATA（琥珀色 indeterminate）:
+╭──────────────────╮
+│    ▓▓▓▓▓▓        │  30% 寬光條來回滑動，無數字，色 #f59e0b
+╰──────────────────╯
+```
+
+#### 修改範圍（已實作）✅ 2026-04-19
+- `web/src/client/hooks/useUploadTask.ts`：加入 `filename`、`fileSizeBytes` 狀態；通知文字改中文；成功/取消通知加 3 秒 auto-dismiss（`scheduleAutoDismiss`）；失敗通知保留需手動關閉
+- `web/src/client/components/TopBar.tsx`：拆除舊 notification badge + Loader2 spinner；改為單列內嵌設計：檔名+大小文字 + 膠囊進度條（UPLOADING 藍色 determinate / PARSING_METADATA 琥珀色 indeterminate 動畫）+ 通知圓角徽章（失敗才顯示 ✕）；加入 `@keyframes indeterminate` 與 `formatFileSize()` 工具函數

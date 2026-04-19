@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-import { Download, HelpCircle, Loader2, Settings, Trash2, Upload, X } from "lucide-react";
+import { Download, HelpCircle, Settings, Trash2, Upload, X } from "lucide-react";
 
 import { exportAnnotations, ExportFormat } from "@/client/api";
 import { KeyboardShortcutsModal } from "@/client/components/KeyboardShortcutsModal";
@@ -123,60 +123,116 @@ export function TopBar(props: TopBarProps) {
           上傳影片
         </button>
 
-        {canCancel && (
-          <button
-            type="button"
-            onClick={uploadTask.cancelUpload}
-            style={btnStyle("ghost", false)}
-          >
-            <X size={13} />
-            取消
-          </button>
-        )}
+        {/* Inline upload status widget */}
+        {(uploadTask.isUploading || uploadTask.notification) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
 
-        {uploadTask.isUploading && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#c9ccd8", fontSize: 12 }}>
-            <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-            {uploadTask.progressPercent}%
+            {/* Filename + size */}
+            {uploadTask.isUploading && uploadTask.filename && (
+              <span style={{ fontSize: 11, color: "#9699b0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {uploadTask.filename}
+                {uploadTask.fileSizeBytes !== null && (
+                  <span style={{ color: "#585a78" }}> · {formatFileSize(uploadTask.fileSizeBytes)}</span>
+                )}
+              </span>
+            )}
+
+            {/* Capsule progress bar */}
+            {uploadTask.isUploading && (
+              <div
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 99,
+                  padding: "2px 8px 2px 4px",
+                  height: 22,
+                  overflow: "hidden",
+                  position: "relative"
+                }}
+              >
+                {uploadTask.status === "UPLOADING" ? (
+                  <>
+                    {/* Determinate bar */}
+                    <div style={{ width: 64, height: 6, borderRadius: 99, background: "rgba(79,140,255,0.2)", overflow: "hidden", flexShrink: 0 }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${uploadTask.progressPercent}%`,
+                        background: "#4f8cff",
+                        borderRadius: 99,
+                        transition: "width 0.2s ease"
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: "#c8cae8", fontVariantNumeric: "tabular-nums", minWidth: 26, textAlign: "right" }}>
+                      {uploadTask.progressPercent}%
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {/* Indeterminate bar (PARSING_METADATA) */}
+                    <div style={{ width: 64, height: 6, borderRadius: 99, background: "rgba(245,158,11,0.2)", overflow: "hidden", flexShrink: 0, position: "relative" }}>
+                      <div style={{
+                        position: "absolute",
+                        height: "100%",
+                        width: "40%",
+                        background: "#f59e0b",
+                        borderRadius: 99,
+                        animation: "indeterminate 1.4s ease-in-out infinite"
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: "#f59e0b" }}>分析中…</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Notification (success / failed / canceled) */}
+            {!uploadTask.isUploading && uploadTask.notification && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "2px 8px",
+                borderRadius: 99,
+                fontSize: 11,
+                background: uploadTask.notification.kind === "success"
+                  ? "rgba(52,211,153,0.12)"
+                  : uploadTask.notification.kind === "error"
+                    ? "rgba(248,113,113,0.12)"
+                    : "rgba(79,140,255,0.12)",
+                color: uploadTask.notification.kind === "success"
+                  ? "#34d399"
+                  : uploadTask.notification.kind === "error"
+                    ? "#f87171"
+                    : "#60a5fa",
+                border: `1px solid ${uploadTask.notification.kind === "success" ? "rgba(52,211,153,0.2)" : uploadTask.notification.kind === "error" ? "rgba(248,113,113,0.2)" : "rgba(79,140,255,0.2)"}`
+              }}>
+                {uploadTask.notification.kind === "success" ? "✅" : uploadTask.notification.kind === "error" ? "❌" : "ℹ️"}
+                <span>{uploadTask.notification.message}</span>
+                {uploadTask.notification.kind === "error" && (
+                  <button
+                    type="button"
+                    onClick={uploadTask.dismissNotification}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", display: "flex", marginLeft: 2 }}
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Cancel button */}
+            {canCancel && (
+              <button
+                type="button"
+                onClick={uploadTask.cancelUpload}
+                style={{ ...btnStyle("ghost", false), padding: "3px 6px" }}
+                title="取消上傳"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
         )}
       </div>
-
-      {/* Upload notification */}
-      {uploadTask.notification && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "3px 10px",
-            borderRadius: 6,
-            fontSize: 12,
-            background:
-              uploadTask.notification.kind === "success"
-                ? "rgba(52, 211, 153, 0.15)"
-                : uploadTask.notification.kind === "error"
-                  ? "rgba(248, 113, 113, 0.15)"
-                  : "rgba(79, 140, 255, 0.15)",
-            color:
-              uploadTask.notification.kind === "success"
-                ? "#34d399"
-                : uploadTask.notification.kind === "error"
-                  ? "#f87171"
-                  : "#4f8cff",
-            border: `1px solid ${uploadTask.notification.kind === "success" ? "rgba(52,211,153,0.25)" : uploadTask.notification.kind === "error" ? "rgba(248,113,113,0.25)" : "rgba(79,140,255,0.25)"}`
-          }}
-        >
-          {uploadTask.notification.message}
-          <button
-            type="button"
-            onClick={uploadTask.dismissNotification}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", display: "flex" }}
-          >
-            <X size={11} />
-          </button>
-        </div>
-      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
@@ -327,9 +383,21 @@ export function TopBar(props: TopBarProps) {
 
       <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes indeterminate {
+          0%   { left: -40%; }
+          60%  { left: 100%; }
+          100% { left: 100%; }
+        }
+      `}</style>
     </header>
   );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function btnStyle(variant: "primary" | "ghost", disabled: boolean): React.CSSProperties {
