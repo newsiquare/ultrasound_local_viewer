@@ -199,34 +199,47 @@ export function VideosListPanel(props: VideosListPanelProps) {
                 fontFamily: "inherit"
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: dot.color,
-                    flexShrink: 0,
-                    boxShadow: isSelected ? `0 0 6px ${dot.color}` : "none"
-                  }}
-                  title={dot.title}
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                {/* Thumbnail */}
+                <img
+                  src={`/api/videos/${item.id}/thumb`}
+                  width={64}
+                  height={36}
+                  alt=""
+                  style={{ objectFit: "cover", borderRadius: 3, flexShrink: 0, background: "#1a1c2e" }}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: isSelected ? 600 : 400,
-                    color: isSelected ? "#c8cae8" : "#d4d6f0",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    flex: 1
-                  }}
-                >
-                  {item.filename}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: "#7880a0", paddingLeft: 14 }}>
-                AI: {item.ai_status} · {item.timeline_status}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+                    <div
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: dot.color,
+                        flexShrink: 0,
+                        boxShadow: isSelected ? `0 0 6px ${dot.color}` : "none"
+                      }}
+                      title={dot.title}
+                    />
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? 600 : 400,
+                        color: isSelected ? "#c8cae8" : "#d4d6f0",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1
+                      }}
+                    >
+                      {item.filename}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#7880a0", paddingLeft: 14 }}>
+                    AI: {item.ai_status} · {item.timeline_status}
+                  </div>
+                </div>
               </div>
             </button>
           );

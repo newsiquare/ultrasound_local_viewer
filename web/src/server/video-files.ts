@@ -87,6 +87,10 @@ export function aiResultPath(videoId: string): string {
   return path.join(aiDir(videoId), "latest.coco.json");
 }
 
+export function thumbPath(videoId: string): string {
+  return path.join(videoDir(videoId), "thumb.jpg");
+}
+
 export async function ensureVideoDirectory(videoId: string): Promise<void> {
   await mkdir(videoDir(videoId), { recursive: true });
 }

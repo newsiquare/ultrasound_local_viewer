@@ -95,6 +95,12 @@ export function ViewerPanel(props: ViewerPanelProps) {
   } = props;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // M1: hidden video for scrubber hover thumbnail
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [scrubberHover, setScrubberHover] = useState<{ x: number; timeSec: number; dataUrl: string | null } | null>(null);
+  const previewSeekingRef = useRef(false);
+  const pendingPreviewTimeRef = useRef<number | null>(null);
+
   const imageTools = useViewerImageTools(currentVideoId);
   const timeline = useFrameTimeline({ videoId: currentVideoId, videoRef });
 
@@ -103,6 +109,45 @@ export function ViewerPanel(props: ViewerPanelProps) {
   const [frameInputValue, setFrameInputValue] = useState("");
   // M2: propagate dialog state
   const [propagateOpen, setPropagateOpen] = useState(false);
+
+  // M1: draw the preview video frame to an in-memory canvas, return dataURL
+  const capturePreviewFrame = useCallback((): string | null => {
+    const vid = previewVideoRef.current;
+    if (!vid || vid.videoWidth === 0) return null;
+    const w = 160;
+    const h = Math.round(w * vid.videoHeight / vid.videoWidth);
+    const offscreen = document.createElement("canvas");
+    offscreen.width = w;
+    offscreen.height = h;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(vid, 0, 0, w, h);
+    return offscreen.toDataURL("image/jpeg", 0.75);
+  }, []);
+
+  // M1: seek the preview video; queue if already seeking
+  const seekPreview = useCallback((timeSec: number) => {
+    const vid = previewVideoRef.current;
+    if (!vid) return;
+    if (previewSeekingRef.current) {
+      pendingPreviewTimeRef.current = timeSec;
+      return;
+    }
+    previewSeekingRef.current = true;
+    vid.currentTime = timeSec;
+  }, []);
+
+  // M1: on seeked — capture frame as dataURL and update state
+  const handlePreviewSeeked = useCallback(() => {
+    const dataUrl = capturePreviewFrame();
+    setScrubberHover(prev => prev ? { ...prev, dataUrl } : null);
+    previewSeekingRef.current = false;
+    if (pendingPreviewTimeRef.current !== null) {
+      const next = pendingPreviewTimeRef.current;
+      pendingPreviewTimeRef.current = null;
+      seekPreview(next);
+    }
+  }, [capturePreviewFrame, seekPreview]);
 
   // M2: batch-copy selected annotations to a range of frames
   const handlePropagate = useCallback(async (items: AnnotationItem[], fromIndex: number, toIndex: number) => {
@@ -437,6 +482,21 @@ export function ViewerPanel(props: ViewerPanelProps) {
                 cursor: imageTools.measureEnabled ? "crosshair" : "default"
               }}
             />
+            {/* M1: invisible preview video — must NOT be display:none so browser decodes frames */}
+            <video
+              ref={previewVideoRef}
+              src={`/api/videos/${currentVideoId}/stream`}
+              preload="auto"
+              muted
+              onSeeked={handlePreviewSeeked}
+              style={{
+                position: "absolute",
+                top: 0, left: 0,
+                width: 1, height: 1,
+                opacity: 0,
+                pointerEvents: "none"
+              }}
+            />
 
             {imageTools.showGrid && (
               <div
@@ -562,23 +622,72 @@ export function ViewerPanel(props: ViewerPanelProps) {
             const trackColor = "#2a2d42";
             const fillColor = timeline.isScrubbing ? "#60a5fa" : "#4f8cff";
             return (
-              <input
-                type="range"
-                className="scrubber"
-                min={0}
-                max={sliderMax}
-                step={0.001}
-                value={Math.min(sliderValue, sliderMax)}
-                onPointerDown={timeline.startScrub}
-                onPointerUp={() => void timeline.endScrub()}
-                onPointerCancel={() => void timeline.endScrub()}
-                onChange={(e) => timeline.updateScrubTime(Number(e.target.value))}
-                style={{
-                  "--scrubber-pct": `${pct}%`,
-                  "--scrubber-fill": fillColor,
-                  "--scrubber-track": trackColor,
-                } as React.CSSProperties}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type="range"
+                  className="scrubber"
+                  min={0}
+                  max={sliderMax}
+                  step={0.001}
+                  value={Math.min(sliderValue, sliderMax)}
+                  onPointerDown={timeline.startScrub}
+                  onPointerUp={() => void timeline.endScrub()}
+                  onPointerCancel={() => void timeline.endScrub()}
+                  onChange={(e) => timeline.updateScrubTime(Number(e.target.value))}
+                  onMouseMove={(e) => {
+                    if (!currentVideoId) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const timeSec = ratio * sliderMax;
+                    setScrubberHover(prev => ({ x: e.clientX - rect.left, timeSec, dataUrl: prev?.dataUrl ?? null }));
+                    seekPreview(timeSec);
+                  }}
+                  onMouseLeave={() => setScrubberHover(null)}
+                  style={{
+                    "--scrubber-pct": `${pct}%`,
+                    "--scrubber-fill": fillColor,
+                    "--scrubber-track": trackColor,
+                  } as React.CSSProperties}
+                />
+
+                {/* M1: Hover thumbnail tooltip */}
+                {scrubberHover !== null && currentVideoId && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "calc(100% + 6px)",
+                      left: scrubberHover.x,
+                      transform: "translateX(-50%)",
+                      pointerEvents: "none",
+                      zIndex: 60,
+                      background: "#0f1018",
+                      border: "1px solid #3c3e58",
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      width: 160,
+                      minHeight: 90
+                    }}
+                  >
+                    {scrubberHover.dataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={scrubberHover.dataUrl}
+                        alt=""
+                        style={{ display: "block", width: 160, height: "auto" }}
+                      />
+                    ) : (
+                      <div style={{ width: 160, height: 90, background: "#1a1c2e" }} />
+                    )}
+                    <span style={{ fontSize: 11, color: "#9699b0", padding: "2px 6px 3px" }}>
+                      {formatClock(scrubberHover.timeSec)}
+                    </span>
+                  </div>
+                )}
+              </div>
             );
           })()}
 

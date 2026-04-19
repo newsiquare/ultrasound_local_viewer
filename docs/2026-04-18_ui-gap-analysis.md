@@ -123,10 +123,10 @@
 | Timeline 幀標記帶 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
 | 框選多個標註 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
 | 跳幀輸入框 | ✅ 2026-04-18 | ✅ | ✅ | — | — |
-| Timeline 幀縮圖 hover | ❌ | ✅ | ❌ | ❌ | ✅ |
+| Timeline 幀縮圖 hover | ✅ 2026-04-19 | ✅ | ❌ | ❌ | ✅ |
 | 複製標註到多幀 | ✅ 2026-04-18 | ✅ | ✅ | ❌ | ❌ |
 | 類別顏色自訂 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
-| Export UI | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Export UI | ✅ 2026-04-19 | ✅ | ✅ | ✅ | ✅ |
 | Toast 通知 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
 | 快捷鍵說明面板 | ✅ 2026-04-18 | ✅ | ✅ | ✅ | ✅ |
 | 影片列表縮圖 | ❌ | — | ✅ | — | ✅ |
@@ -165,10 +165,11 @@
 
 ### 中優先
 
-- [ ] **M1** Timeline 幀縮圖 Hover 預覽
-  - [ ] 決定縮圖產生方式（FFmpeg 非同步 or seek 隱藏 video）
-  - [ ] 後端縮圖 API or 前端 seek 機制實作
-  - [ ] scrubber hover → 顯示縮圖 tooltip（含時間碼）
+- [x] **M1** Timeline 幀縮圖 Hover 預覽 ✅ 2026-04-19
+  - [x] 前端方案：隱藏 `<video>` 元素（`opacity:0; width:1px`，非 `display:none`）seek 後用 in-memory canvas 截圖
+  - [x] `onSeeked` JSX prop 綁定（避免 `useEffect` ref 時序問題）
+  - [x] scrubber `onMouseMove` → seek 預覽影片，顯示縮圖 tooltip（含時間碼）
+  - [x] seek 排隊機制（`previewSeekingRef` + `pendingPreviewTimeRef`）處理快速滑動
 
 - [x] **M2** 複製標註到其他幀（Propagate）✅ 2026-04-18
   - [x] 多選工具列新增「複製到其他幀」按鈕
@@ -191,11 +192,14 @@
   - [x] 複製標註完成
   - [x] Undo / Redo 提示
 
-- [ ] **L2** 匯出格式選項 UI
-  - [ ] TopBar 新增 Export dropdown
-  - [ ] 後端 `GET /api/videos/:id/export?format=coco` 輸出現有 COCO
-  - [ ] 後端 `GET /api/videos/:id/export?format=coco-manual` 僅輸出 MANUAL
-  - [ ] 後端 `GET /api/videos/:id/export?format=yolo` 轉換為 YOLO TXT
+- [x] **L2** 匯出格式選項 UI ✅ 2026-04-19
+  - [x] TopBar 新增 Export dropdown（`Download` icon）
+  - [x] 後端 `GET /api/videos/:id/export?format=coco`：全部標注（MANUAL + AI）COCO JSON
+  - [x] 後端 `GET /api/videos/:id/export?format=coco-manual`：僅 MANUAL 標注 COCO JSON
+  - [x] 後端 `GET /api/videos/:id/export?format=yolo`：MANUAL bbox 轉 YOLO TXT（正規化座標）
+  - [x] `Content-Disposition: attachment` 觸發瀏覽器直接下載
+  - [x] 修正：bbox 從 `geometry_json` 的 `{x,y,width,height}` 物件解析（而非 array）
+  - [x] 修正：`annotation_type` 比較改用 `.toUpperCase()` 對應 DB 全大寫儲存
 
 - [x] **L3** 鍵盤快捷鍵說明面板 ✅ 2026-04-18
   - [x] TopBar 右上角新增 `?` 按鈕，或按 `?` 鍵觸發
@@ -213,6 +217,9 @@
 | 日期 | 項目 | 說明 |
 |------|------|------|
 | 2026-04-18 | BBOX 淡色填充 | `AnnotationCanvas` 的矩形標註由 `fill="none"` 改為 `fill="${color}22"`（同多邊形，約 13% 不透明度），提升區域辨識度 |
+| 2026-04-19 | Export bbox 解析修正 | `bbox_json` 實為 `{x,y,width,height}` 物件而非陣列，改從 `geometry_json` 解析；POLYGON 外接矩形從頂點計算 |
+| 2026-04-19 | Export annotation_type 大小寫 | DB 儲存 `"BBOX"` / `"POLYGON"` 全大寫，比較改用 `.toUpperCase()` |
+| 2026-04-19 | M1 縮圖技術決策 | 採前端 seek 方案：`opacity:0` 隱藏 video（非 `display:none`）+ `onSeeked` JSX prop + in-memory canvas → dataURL |
 
 ---
 
@@ -222,6 +229,4 @@
 
 | 優先 | 項目 | 複雜度 | 建議做法 |
 |------|------|--------|---------|
-| 中 | **M1** Timeline 幀縮圖 Hover | 高 | 前端方案：在 scrubber hover 時 seek 隱藏 `<video>` 並用 Canvas 截圖，省去後端 API |
-| 低 | **L2** 匯出格式 UI | 中 | 前端 Export dropdown + 後端新增 `/export` route，先實作 COCO 再擴展 YOLO |
-| 低 | **L4** 影片列表縮圖 | 中 | 與 M1 共用縮圖機制；若 M1 選前端 seek 方案，L4 需改用後端 FFmpeg 預先產生 |
+| 低 | **L4** 影片列表縮圖 | 中 | 需後端 FFmpeg 預先產生縮圖（M1 已採前端 seek 方案，L4 無法共用）；上傳完成後非同步產生 `thumb.jpg` |

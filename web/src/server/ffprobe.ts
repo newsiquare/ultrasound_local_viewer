@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 
 import { HttpError } from "@/server/errors";
-import { TimelineJson } from "@/server/video-files";
+import { TimelineJson, thumbPath, videoDir } from "@/server/video-files";
 
 interface FfprobeFormat {
   duration?: string;
@@ -205,4 +208,49 @@ export async function buildTimeline(
     sourceFps,
     frames: timelineFrames
   };
+}
+
+// Per-video mutex to avoid concurrent ffmpeg processes for the same video
+const thumbLocks = new Map<string, Promise<void>>();
+
+export async function extractThumb(videoId: string, sourcePath: string): Promise<void> {
+  const existing = thumbLocks.get(videoId);
+  if (existing) {
+    return existing;
+  }
+
+  const work = (async () => {
+    const outPath = thumbPath(videoId);
+    if (existsSync(outPath)) return;
+
+    await mkdir(videoDir(videoId), { recursive: true });
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("ffmpeg", [
+        "-ss", "0",
+        "-i", sourcePath,
+        "-frames:v", "1",
+        "-vf", "scale=128:72",
+        "-q:v", "3",
+        "-y",
+        outPath
+      ], { stdio: ["ignore", "ignore", "pipe"] });
+
+      let stderr = "";
+      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) {
+          reject(new Error(`ffmpeg exited ${code}: ${stderr}`));
+        } else {
+          resolve();
+        }
+      });
+    });
+  })().finally(() => {
+    thumbLocks.delete(videoId);
+  });
+
+  thumbLocks.set(videoId, work);
+  return work;
 }

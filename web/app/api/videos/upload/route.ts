@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES } from "@/server/constants";
 import { ensureDatabase } from "@/server/db";
 import { HttpError } from "@/server/errors";
-import { buildTimeline, probeMetadata } from "@/server/ffprobe";
+import { buildTimeline, extractThumb, probeMetadata } from "@/server/ffprobe";
 import { ok } from "@/server/response";
 import { asErrorResponse } from "@/server/route-error";
 import {
@@ -89,6 +89,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       pixelFormat: metadata.pixel_format,
       timelineStatus: "READY",
       timelineError: null
+    });
+
+    // Generate thumbnail in the background — do not await so upload returns quickly
+    extractThumb(videoId, sourcePath).catch(() => {
+      // Best-effort; thumb route will retry on demand if missing
     });
 
     return ok(
