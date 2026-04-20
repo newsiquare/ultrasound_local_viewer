@@ -267,15 +267,29 @@ export function VideosListPanel(props: VideosListPanelProps) {
           {/* Title */}
           <div style={{
             padding: "4px 12px 6px",
-            fontSize: 11,
-            color: "#585a78",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
             borderBottom: "1px solid #252638",
             marginBottom: 4
           }}>
-            {ctxMenu.filename}
+            <div style={{
+              fontSize: 11,
+              color: "#585a78",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {ctxMenu.filename}
+            </div>
+            <div style={{
+              fontSize: 10,
+              color: "#3e4060",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              marginTop: 2,
+              fontFamily: "monospace"
+            }}>
+              {ctxMenu.videoId}
+            </div>
           </div>
           {onClearAi && ctxMenu.aiStatus === "DONE" && (
             <button
