@@ -18,6 +18,7 @@
 ## 文件
 
 - 開發計畫：`docs/development-plan.md`
+- 功能規格（移植參考）：`docs/feature-spec.md`
 
 ## 技術棧
 
