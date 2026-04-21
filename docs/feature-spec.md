@@ -1,6 +1,6 @@
 # 功能規格：本地影片辨識服務
 
-> 版本：v1.2（2026-04-20）  
+> 版本：v1.3（2026-04-21）  
 > 用途：作為重構移植的功能對照參考文件。
 
 ---
@@ -121,9 +121,9 @@
 │ min 12%   │       min 35%                    │  min 18%          │
 │ max 30%   │                                  │  max 40%          │
 │           │  ┌──────────────────────────┐    │                   │
-│ 影片列表   │  │ ViewerImageToolbar       │    │ 類別圖層 (28%)    │
-│ ┌───────┐ │  ├──────────────────────────┤    │ ─────────────     │
-│ │🟢 v1  │ │  │ ViewerAiActionDock       │    │ 標註圖層 (flex:1) │
+│ 影片列表   │  │ ViewerCommandBar         │    │ 類別圖層 (28%)    │
+│ ┌───────┐ │  │ (Image + Annot + AI)     │    │ ─────────────     │
+│ │🟢 v1  │ │  ├──────────────────────────┤    │ 標註圖層 (flex:1) │
 │ │🟡 v2  │ │  ├──────────────────────────┤    │ ─────────────     │
 │ │🔴 v3  │ │  │ 影片 + SVG Overlay       │    │ AI 圖層  (37%)   │
 │ └───────┘ │  │ (純黑背景 #000)           │    │                   │
@@ -224,14 +224,20 @@
 
 **垂直結構（由上到下）：**
 
-1. **ViewerImageToolbar**（影像 + 標註工具列）
-2. **ViewerAiActionDock**（AI 操作列）
-3. **影片畫布區**（`flex: 1`，`overflow: auto`，`background: #000`）
-4. **播放控制區**（`background: #0f1018`，`borderTop: 1px solid #252638`）
+1. **ViewerCommandBar**（單列工具列，整合影像 + 標註 + AI）
+2. **影片畫布區**（`flex: 1`，`overflow: auto`，`background: #000`）
+3. **播放控制區**（`background: #0f1018`，`borderTop: 1px solid #252638`）
+
+#### 單列工具列（ViewerCommandBar）
+
+- 單列容器樣式：`display: flex`、`alignItems: center`、`overflowX: auto`、`padding: 4px 8px`、`background: #0f1018`、`borderBottom: 1px solid #252638`。
+- 左側：`ViewerImageToolbar`（embedded 模式）承載影像與標註工具。
+- 右側：`ViewerAiActionDock`（embedded 模式）承載 AI 狀態與「開始辨識 / 取消辨識」操作。
+- `ViewerAiActionDock` 的狀態 badge 取消圓點（dot），避免視覺噪音。
 
 #### 影像工具列（ViewerImageToolbar）
 
-背景 `#0f1018`，高度由按鈕決定，按鈕尺寸 32×32px（borderRadius 6）。工具分為 **5 組**，以 1px 垂直分隔線隔開：
+在單列工具列內以 **embedded 模式**渲染（無獨立背景與底線），按鈕尺寸 32×32px（borderRadius 6）。工具分為 **5 組**，以 1px 垂直分隔線隔開：
 
 | 組 | 內容 |
 |------|------|
@@ -245,11 +251,13 @@
 
 #### AI 操作列（ViewerAiActionDock）
 
-背景 `#0f1018`，`borderBottom: 1px solid #252638`，包含：
+在單列工具列右側以 **embedded 模式**渲染（無獨立背景與底線），包含：
 - Brain icon + "AI" 標籤
-- 狀態膠囊（badge）
+- 狀態膠囊（badge，無圓點）
 - "開始辨識" / "取消辨識" 按鈕
 - 錯誤訊息（條件渲染）
+- 狀態未同步時顯示「同步中」，同步後才顯示 `IDLE/PROCESSING/DONE/FAILED/CANCELED`
+- `PROCESSING` 顯示進度百分比與累計耗時；終態顯示最終耗時（例：`完成（耗時 12.1 秒）`）
 
 #### 影片畫布區
 
@@ -624,6 +632,8 @@ VFR（可變幀率）影片不可用 `fps × n` 估算幀時間，必須以 `pts
 滑鼠移過時間軸時，在游標上方顯示該時間點的影片幀縮圖。實作方式為背景維護一個隱藏 `<video>` 元素 + `<canvas>`，移動游標時 seek 隱藏影片並截圖（`capturePreviewFrame()`）；因 seek 非同步，採 pending queue 避免重疊 seek。
 
 ### 2.6 影像工具列
+
+影像工具與標註工具位於單列工具列左側；AI 狀態/按鈕位於同列右側（不再拆成第二列）。
 
 | 功能 | 預設值 | 說明 |
 |------|--------|------|
@@ -1051,6 +1061,8 @@ Browser ──POST ai-detect──▶ Next.js API Route
 | `FAILED` | 辨識失敗，記錄 `error_message` |
 | `CANCELED` | 使用者手動取消 |
 
+> 補充：`同步中` 為前端顯示暫態（非 DB 狀態）。在尚未收到該 `videoId` 的第一筆 AI 快照前，badge 一律顯示「同步中」，避免刷新/切換影片時閃爍 `IDLE` 或舊影片狀態。
+
 ### 4.4 開始辨識流程
 
 **前端前置檢查：**
@@ -1106,6 +1118,10 @@ event: canceled    → 辨識取消終態
 - 連線建立後先推一次當前狀態（避免前端空白等待）。
 - 每 15～30 秒送一筆 keepalive 心跳。
 - 支援 `Last-Event-ID`，前端重連可續接事件流。
+- `status/progress/done/failed/canceled` 事件 payload 含 `videoId`，前端僅接受「目前 active `videoId`」事件，避免切換影片時舊請求覆寫新畫面。
+- `GET /api/videos/:id/ai-status` snapshot 含 `durationMs`（毫秒）：  
+  - `PROCESSING`：`now - started_at`  
+  - `DONE/FAILED/CANCELED`：`finished_at 或 canceled_at - started_at`
 
 **Fallback 輪詢：**
 - SSE 連續 3 次失敗或 30 秒無事件，自動切換為輪詢 `GET /api/videos/:id/ai-status`（每 5 秒）。
@@ -1846,6 +1862,10 @@ storage/
   - SSE error 累積 >= 3 次，或
   - 30 秒無事件。
   - 輪詢頻率 5 秒。
+- 前端狀態防閃爍：
+  - 在尚未收到「當前 `videoId`」第一筆快照前，badge 顯示「同步中」。
+  - 切換影片時，舊 `videoId` 的 snapshot/event 會被丟棄（不覆寫目前 UI）。
+- `GET /api/videos/:id/ai-status` snapshot 已包含 `durationMs`；前端用於顯示 `PROCESSING` 累計耗時與終態最終耗時。
 - `WORKER_UNREACHABLE` 目前會把 AI job 設為 `FAILED`，但**不會**自動寫入 `risk_events`。
 - 啟動時 `ensureAiRunnerReady()` 會掃描 DB 內 `PROCESSING` 影片並嘗試接管（crash recovery）。
 
