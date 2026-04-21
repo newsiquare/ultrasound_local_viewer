@@ -11,10 +11,11 @@ interface ViewerImageToolbarProps {
   disabled?: boolean;
   activeTool?: AnnotationToolType | null;
   onToolChange?: (tool: AnnotationToolType | null) => void;
+  embedded?: boolean;
 }
 
 export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
-  const { tools, disabled = false, activeTool = null, onToolChange } = props;
+  const { tools, disabled = false, activeTool = null, onToolChange, embedded = false } = props;
   const [showAdjust, setShowAdjust] = useState(false);
 
   return (
@@ -22,10 +23,10 @@ export function ViewerImageToolbar(props: ViewerImageToolbarProps) {
       style={{
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        padding: "4px 8px",
-        background: "#0f1018",
-        borderBottom: "1px solid #252638",
+        justifyContent: "flex-start",
+        padding: embedded ? 0 : "4px 8px",
+        background: embedded ? "transparent" : "#0f1018",
+        borderBottom: embedded ? "none" : "1px solid #252638",
         flexShrink: 0,
       }}
     >

@@ -6,6 +6,7 @@ import { AiStatus } from "@/client/types";
 
 interface ViewerAiActionDockProps {
   status: AiStatus;
+  statusLoading?: boolean;
   progress: number;
   durationMs: number | null;
   isMutating: boolean;
@@ -16,14 +17,15 @@ interface ViewerAiActionDockProps {
   onDismissNotice: () => void;
   onStart: () => Promise<void>;
   onCancel: () => Promise<void>;
+  embedded?: boolean;
 }
 
-const STATUS_CONFIG: Record<AiStatus, { label: string; color: string; pulse: boolean }> = {
-  IDLE: { label: "IDLE", color: "#7880a0", pulse: false },
-  PROCESSING: { label: "處理中", color: "#f59e0b", pulse: true },
-  DONE: { label: "完成", color: "#34d399", pulse: false },
-  FAILED: { label: "失敗", color: "#f87171", pulse: false },
-  CANCELED: { label: "已取消", color: "#6b7280", pulse: false }
+const STATUS_CONFIG: Record<AiStatus, { label: string; color: string }> = {
+  IDLE: { label: "IDLE", color: "#7880a0" },
+  PROCESSING: { label: "處理中", color: "#f59e0b" },
+  DONE: { label: "完成", color: "#34d399" },
+  FAILED: { label: "失敗", color: "#f87171" },
+  CANCELED: { label: "已取消", color: "#6b7280" }
 };
 
 function formatDurationLabel(durationMs: number | null): string | null {
@@ -45,6 +47,7 @@ function formatDurationLabel(durationMs: number | null): string | null {
 export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
   const {
     status,
+    statusLoading = false,
     progress,
     durationMs,
     isMutating,
@@ -54,7 +57,8 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
     notice,
     onDismissNotice,
     onStart,
-    onCancel
+    onCancel,
+    embedded = false
   } = props;
 
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.IDLE;
@@ -70,11 +74,11 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
         display: "flex",
         alignItems: "center",
         gap: 8,
-        padding: "4px 8px",
-        background: "#0f1018",
-        borderBottom: "1px solid #252638",
+        padding: embedded ? 0 : "4px 8px",
+        background: embedded ? "transparent" : "#0f1018",
+        borderBottom: embedded ? "none" : "1px solid #252638",
         flexShrink: 0,
-        flexWrap: "wrap"
+        flexWrap: "nowrap"
       }}
     >
       {/* AI label */}
@@ -90,28 +94,19 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 5,
+          gap: 4,
           padding: "2px 8px",
           borderRadius: 999,
-          background: `${cfg.color}22`,
-          border: `1px solid ${cfg.color}55`,
+          background: statusLoading ? "rgba(120,128,160,0.14)" : `${cfg.color}22`,
+          border: statusLoading ? "1px solid rgba(120,128,160,0.35)" : `1px solid ${cfg.color}55`,
           fontSize: 11,
           fontWeight: 600,
-          color: cfg.color
+          color: statusLoading ? "#9ca3b9" : cfg.color
         }}
       >
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: cfg.color,
-            animation: cfg.pulse ? "pulse-dot 1.2s ease-in-out infinite" : "none"
-          }}
-        />
-        {cfg.label}
-        {status === "PROCESSING" ? ` ${progress}%` : ""}
-        {showDuration ? `（${durationPrefix}${durationLabel}）` : ""}
+        {statusLoading ? "同步中" : cfg.label}
+        {!statusLoading && status === "PROCESSING" ? ` ${progress}%` : ""}
+        {!statusLoading && showDuration ? `（${durationPrefix}${durationLabel}）` : ""}
       </div>
 
       {/* Start button */}
@@ -205,7 +200,6 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
       `}</style>
     </div>
   );

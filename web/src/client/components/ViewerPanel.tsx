@@ -185,12 +185,15 @@ export function ViewerPanel(props: ViewerPanelProps) {
   const durationFromMeta = bootstrapData?.meta.duration_sec ?? 0;
   const sliderMax = timeline.durationSec > 0 ? timeline.durationSec : durationFromMeta > 0 ? durationFromMeta : 1;
   const sliderValue = timeline.isScrubbing ? timeline.scrubTimeSec : timeline.currentTimeSec;
-  const initialAiStatus = (bootstrapData?.aiStatus ?? "IDLE") as AiStatus;
+  const bootstrapAiStatus =
+    bootstrapData && bootstrapData.videoId === currentVideoId ? bootstrapData.aiStatus : null;
+  const initialAiStatus = (bootstrapAiStatus ?? "IDLE") as AiStatus;
   const ai = useAiStatusStream({
     videoId: currentVideoId,
     initialStatus: initialAiStatus,
     onTerminalStatus: onRefresh
   });
+  const isAiStatusLoading = Boolean(currentVideoId) && !ai.hasSyncedStatus;
   useEffect(() => {
     onFrameIndexChange?.(timeline.currentFrame?.displayIndex ?? null);
     onFrameIdChange?.(timeline.currentFrame?.frameId ?? null);
@@ -348,32 +351,51 @@ export function ViewerPanel(props: ViewerPanelProps) {
         background: "#0a0b14"
       }}
     >
-      {/* Toolbars */}
-      <ViewerImageToolbar
-        tools={imageTools}
-        disabled={!currentVideoId}
-        activeTool={annotationTool.activeTool}
-        onToolChange={(tool) => {
-          if (tool === annotationTool.activeTool) {
-            annotationTool.setActiveTool(null);
-          } else {
-            annotationTool.setActiveTool(tool as AnnotationToolType | null);
-          }
+      {/* Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "4px 8px",
+          background: "#0f1018",
+          borderBottom: "1px solid #252638",
+          flexShrink: 0,
+          overflowX: "auto"
         }}
-      />
-      <ViewerAiActionDock
-        status={ai.status}
-        progress={ai.progress}
-        durationMs={ai.durationMs}
-        isMutating={ai.isMutating}
-        timelineReady={timelineReady}
-        hasVideo={Boolean(currentVideoId)}
-        errorMessage={ai.errorMessage}
-        notice={ai.notice}
-        onDismissNotice={ai.dismissNotice}
-        onStart={ai.startDetect}
-        onCancel={ai.cancelDetect}
-      />
+      >
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1 }}>
+          <ViewerImageToolbar
+            embedded
+            tools={imageTools}
+            disabled={!currentVideoId}
+            activeTool={annotationTool.activeTool}
+            onToolChange={(tool) => {
+              if (tool === annotationTool.activeTool) {
+                annotationTool.setActiveTool(null);
+              } else {
+                annotationTool.setActiveTool(tool as AnnotationToolType | null);
+              }
+            }}
+          />
+        </div>
+
+        <ViewerAiActionDock
+          embedded
+          status={ai.status}
+          statusLoading={isAiStatusLoading}
+          progress={ai.progress}
+          durationMs={ai.durationMs}
+          isMutating={ai.isMutating}
+          timelineReady={timelineReady}
+          hasVideo={Boolean(currentVideoId)}
+          errorMessage={ai.errorMessage}
+          notice={ai.notice}
+          onDismissNotice={ai.dismissNotice}
+          onStart={ai.startDetect}
+          onCancel={ai.cancelDetect}
+        />
+      </div>
 
       {/* Video canvas */}
       <div

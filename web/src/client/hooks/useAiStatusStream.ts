@@ -13,6 +13,7 @@ interface UseAiStatusStreamOptions {
 
 interface UseAiStatusStreamResult {
   status: AiStatus;
+  hasSyncedStatus: boolean;
   progress: number;
   errorMessage: string | null;
   updatedAt: string | null;
@@ -44,6 +45,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   const { videoId, initialStatus, onTerminalStatus } = options;
 
   const [status, setStatus] = useState<AiStatus>(initialStatus);
+  const [hasSyncedStatus, setHasSyncedStatus] = useState(false);
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   const reconnectAttemptsRef = useRef(0);
   const lastEventAtRef = useRef(0);
   const healthStateRef = useRef<SseHealthState>("UNKNOWN");
+  const activeVideoIdRef = useRef<string | null>(videoId);
   const statusRef = useRef<AiStatus>(initialStatus);
   const durationMsRef = useRef<number | null>(null);
   const durationBaseMsRef = useRef<number | null>(null);
@@ -115,13 +118,19 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   );
 
   const applySnapshot = useCallback(
-    (snapshot: AiStatusData) => {
+    (snapshot: AiStatusData): boolean => {
+      const activeVideoId = activeVideoIdRef.current;
+      if (!activeVideoId || snapshot.videoId !== activeVideoId) {
+        return false;
+      }
+
       const nowTs = Date.now();
       const prevStatus = statusRef.current;
       const nextStatus = snapshot.status;
 
       setStatus(nextStatus);
       statusRef.current = nextStatus;
+      setHasSyncedStatus(true);
 
       setProgress(snapshot.progress ?? (nextStatus === "DONE" ? 100 : 0));
       setErrorMessage(snapshot.errorMessage ?? null);
@@ -151,6 +160,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
 
       durationMsRef.current = resolvedDurationMs;
       setDurationMs(resolvedDurationMs);
+      return true;
     },
     [currentLiveDurationMs]
   );
@@ -162,7 +172,10 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
 
     try {
       const snapshot = await fetchAiStatus(videoId);
-      applySnapshot(snapshot);
+      const applied = applySnapshot(snapshot);
+      if (!applied) {
+        return;
+      }
       if (TERMINAL_STATUSES.has(snapshot.status)) {
         closeEventSource();
         stopPolling();
@@ -192,7 +205,9 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   );
 
   useEffect(() => {
+    activeVideoIdRef.current = videoId;
     setStatus(initialStatus);
+    setHasSyncedStatus(false);
     setProgress(initialStatus === "DONE" ? 100 : 0);
     setErrorMessage(null);
     setUpdatedAt(null);
@@ -231,7 +246,10 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
       onAnyEvent();
       try {
         const payload = JSON.parse(event.data) as AiStatusData;
-        applySnapshot(payload);
+        const applied = applySnapshot(payload);
+        if (!applied) {
+          return;
+        }
         if (TERMINAL_STATUSES.has(payload.status)) {
           closeEventSource();
           stopPolling();
@@ -344,6 +362,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   return useMemo(
     () => ({
       status,
+      hasSyncedStatus,
       progress,
       errorMessage,
       updatedAt,
@@ -359,6 +378,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     [
       cancelDetect,
       dismissNotice,
+      hasSyncedStatus,
       durationMs,
       errorMessage,
       isMutating,
