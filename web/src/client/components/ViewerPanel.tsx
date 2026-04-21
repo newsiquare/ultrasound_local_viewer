@@ -364,6 +364,7 @@ export function ViewerPanel(props: ViewerPanelProps) {
       <ViewerAiActionDock
         status={ai.status}
         progress={ai.progress}
+        durationMs={ai.durationMs}
         isMutating={ai.isMutating}
         timelineReady={timelineReady}
         hasVideo={Boolean(currentVideoId)}

@@ -16,6 +16,7 @@ interface UseAiStatusStreamResult {
   progress: number;
   errorMessage: string | null;
   updatedAt: string | null;
+  durationMs: number | null;
   isStreaming: boolean;
   isPolling: boolean;
   isMutating: boolean;
@@ -32,6 +33,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function normalizeDurationMs(input: number | null | undefined): number | null {
+  if (typeof input !== "number" || !Number.isFinite(input)) {
+    return null;
+  }
+  return Math.max(0, input);
+}
+
 export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatusStreamResult {
   const { videoId, initialStatus, onTerminalStatus } = options;
 
@@ -39,6 +47,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [durationMs, setDurationMs] = useState<number | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
@@ -50,6 +59,19 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
   const reconnectAttemptsRef = useRef(0);
   const lastEventAtRef = useRef(0);
   const healthStateRef = useRef<SseHealthState>("UNKNOWN");
+  const statusRef = useRef<AiStatus>(initialStatus);
+  const durationMsRef = useRef<number | null>(null);
+  const durationBaseMsRef = useRef<number | null>(null);
+  const durationBaseAtRef = useRef<number | null>(null);
+
+  const currentLiveDurationMs = useCallback((nowTs: number = Date.now()): number | null => {
+    const baseMs = durationBaseMsRef.current;
+    const baseAt = durationBaseAtRef.current;
+    if (baseMs === null || baseAt === null) {
+      return durationMsRef.current;
+    }
+    return Math.max(0, baseMs + (nowTs - baseAt));
+  }, []);
 
   const closeEventSource = useCallback(() => {
     if (eventSourceRef.current) {
@@ -92,13 +114,46 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     [videoId]
   );
 
-  const applySnapshot = useCallback((snapshot: AiStatusData) => {
-    setStatus(snapshot.status);
-    setProgress(snapshot.progress ?? (snapshot.status === "DONE" ? 100 : 0));
-    setErrorMessage(snapshot.errorMessage ?? null);
-    setUpdatedAt(snapshot.updatedAt ?? nowIso());
-    lastEventAtRef.current = Date.now();
-  }, []);
+  const applySnapshot = useCallback(
+    (snapshot: AiStatusData) => {
+      const nowTs = Date.now();
+      const prevStatus = statusRef.current;
+      const nextStatus = snapshot.status;
+
+      setStatus(nextStatus);
+      statusRef.current = nextStatus;
+
+      setProgress(snapshot.progress ?? (nextStatus === "DONE" ? 100 : 0));
+      setErrorMessage(snapshot.errorMessage ?? null);
+      setUpdatedAt(snapshot.updatedAt ?? nowIso());
+      lastEventAtRef.current = nowTs;
+
+      const providedDurationMs = normalizeDurationMs(snapshot.durationMs);
+      const liveDurationMs = currentLiveDurationMs(nowTs);
+      let resolvedDurationMs: number | null = null;
+
+      if (nextStatus === "PROCESSING") {
+        const baseMs =
+          providedDurationMs ??
+          (prevStatus === "PROCESSING" && liveDurationMs !== null ? liveDurationMs : 0);
+        durationBaseMsRef.current = baseMs;
+        durationBaseAtRef.current = nowTs;
+        resolvedDurationMs = baseMs;
+      } else if (TERMINAL_STATUSES.has(nextStatus)) {
+        resolvedDurationMs = providedDurationMs ?? liveDurationMs;
+        durationBaseMsRef.current = null;
+        durationBaseAtRef.current = null;
+      } else {
+        durationBaseMsRef.current = null;
+        durationBaseAtRef.current = null;
+        resolvedDurationMs = null;
+      }
+
+      durationMsRef.current = resolvedDurationMs;
+      setDurationMs(resolvedDurationMs);
+    },
+    [currentLiveDurationMs]
+  );
 
   const pollOnce = useCallback(async () => {
     if (!videoId) {
@@ -141,6 +196,11 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     setProgress(initialStatus === "DONE" ? 100 : 0);
     setErrorMessage(null);
     setUpdatedAt(null);
+    setDurationMs(null);
+    statusRef.current = initialStatus;
+    durationMsRef.current = null;
+    durationBaseMsRef.current = null;
+    durationBaseAtRef.current = null;
 
     reconnectAttemptsRef.current = 0;
     lastEventAtRef.current = Date.now();
@@ -225,6 +285,22 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     onTerminalStatus
   ]);
 
+  useEffect(() => {
+    if (status !== "PROCESSING") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const nextDurationMs = currentLiveDurationMs();
+      durationMsRef.current = nextDurationMs;
+      setDurationMs(nextDurationMs);
+    }, 200);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [currentLiveDurationMs, status]);
+
   const startDetect = useCallback(async () => {
     if (!videoId || status === "PROCESSING") {
       return;
@@ -271,6 +347,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
       progress,
       errorMessage,
       updatedAt,
+      durationMs,
       isStreaming,
       isPolling,
       isMutating,
@@ -282,6 +359,7 @@ export function useAiStatusStream(options: UseAiStatusStreamOptions): UseAiStatu
     [
       cancelDetect,
       dismissNotice,
+      durationMs,
       errorMessage,
       isMutating,
       isPolling,

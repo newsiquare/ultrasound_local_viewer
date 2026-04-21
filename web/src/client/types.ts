@@ -132,6 +132,7 @@ export interface AiStatusData {
   errorMessage: string | null;
   updatedAt: string;
   progress: number;
+  durationMs?: number | null;
 }
 
 export interface AiResultImage {

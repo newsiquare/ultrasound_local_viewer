@@ -7,6 +7,7 @@ import { AiStatus } from "@/client/types";
 interface ViewerAiActionDockProps {
   status: AiStatus;
   progress: number;
+  durationMs: number | null;
   isMutating: boolean;
   timelineReady: boolean;
   hasVideo: boolean;
@@ -25,10 +26,27 @@ const STATUS_CONFIG: Record<AiStatus, { label: string; color: string; pulse: boo
   CANCELED: { label: "已取消", color: "#6b7280", pulse: false }
 };
 
+function formatDurationLabel(durationMs: number | null): string | null {
+  if (durationMs === null || !Number.isFinite(durationMs)) {
+    return null;
+  }
+
+  const seconds = Math.max(0, durationMs) / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} 秒`;
+  }
+
+  const rounded = Math.round(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const restSeconds = rounded % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(restSeconds).padStart(2, "0")}`;
+}
+
 export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
   const {
     status,
     progress,
+    durationMs,
     isMutating,
     timelineReady,
     hasVideo,
@@ -42,6 +60,9 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.IDLE;
   const canStart = hasVideo && timelineReady && status !== "PROCESSING" && !isMutating;
   const showCancel = status === "PROCESSING";
+  const durationLabel = formatDurationLabel(durationMs);
+  const showDuration = durationLabel !== null && status !== "IDLE";
+  const durationPrefix = status === "PROCESSING" ? "" : "耗時 ";
 
   return (
     <div
@@ -90,6 +111,7 @@ export function ViewerAiActionDock(props: ViewerAiActionDockProps) {
         />
         {cfg.label}
         {status === "PROCESSING" ? ` ${progress}%` : ""}
+        {showDuration ? `（${durationPrefix}${durationLabel}）` : ""}
       </div>
 
       {/* Start button */}

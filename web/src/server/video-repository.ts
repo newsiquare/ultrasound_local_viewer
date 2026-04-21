@@ -40,6 +40,9 @@ export interface AiJobRow {
   status: string;
   updated_at: string;
   error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  canceled_at: string | null;
 }
 
 export interface CategoryRow {
@@ -227,7 +230,7 @@ LIMIT 1;
 export async function getAiJobByVideoId(videoId: string): Promise<AiJobRow | null> {
   assertUuidV7(videoId);
   const rows = await queryRows<AiJobRow>(`
-SELECT status, updated_at, error_message
+SELECT status, updated_at, error_message, started_at, finished_at, canceled_at
 FROM ai_jobs
 WHERE video_id = ${sqlString(videoId)}
 LIMIT 1;
