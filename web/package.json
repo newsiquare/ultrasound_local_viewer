@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/run-next-with-env.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/run-next-with-env.mjs start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:ai-overlay-stability": "rm -rf .tmp-tests && tsc -p tsconfig.tests.json && node --test .tmp-tests/tests/ai-overlay-stability.test.js && rm -rf .tmp-tests",

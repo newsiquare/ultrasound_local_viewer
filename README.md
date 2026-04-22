@@ -32,7 +32,19 @@
 - `ai-worker/`: FastAPI + Ultralytics
 - `storage/`: 本地影片、AI結果與 SQLite 檔案
 
-## AI Worker 環境（Conda）
+## Web 服務啟動
+
+```bash
+cd web
+npm install        # 首次或 package.json 有異動時執行
+npm run dev        # 開發模式（預設 http://localhost:3100，由 .env 的 PORT 決定）
+```
+
+> **PORT 設定**：`web/.env` 內的 `PORT=3100` 會透過啟動腳本 `scripts/run-next-with-env.mjs` 傳給 Next.js，若未設定則預設為 3000。
+
+---
+
+## AI Worker 服務啟動（Conda）
 
 ```bash
 conda create -n us-worker python=3.11 -y
